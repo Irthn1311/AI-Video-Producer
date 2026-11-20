@@ -59,9 +59,16 @@ export function captions(root,config,scene,state,opts={}){
   const sentences=splitSentences(scene.narration);const weight=sentences.reduce((a,s)=>a+s.length,0)||1;let cursor=0;const rows=sentences.map(s=>{let start=cursor;cursor+=duration*s.length/weight;return {startMs:Math.round(start*1000),endMs:Math.round(cursor*1000),text:s};});
   const srt=rows.map((r,i)=>`${i+1}\n${stamp(r.startMs/1000)} --> ${stamp(r.endMs/1000)}\n${r.text}\n`).join('\n');const out=path.join(dir,'captions.srt');atomicWrite(out,srt);writeJson(path.join(dir,'captions.json'),{timingMethod:'ESTIMATED proportional text length (not forced alignment)',language:config.language?.subtitles?.[0]||config.language?.narration,rows});recordArtifact(root,state,scene,'captions',out,h.captions);return {file:out,count:rows.length,estimated:true};
 }
-export function preview(root,config,scene,state,opts={}){
+export async function preview(root,config,scene,state,opts={}){
   requireUnlocked(state,scene.id);const ss=sceneState(state,scene.id),parts=staleParts(scene,config,ss,root);if(!parts.preview&&!opts.force)return {reused:true};
   if(parts.capture)throw Error(`Capture missing/stale for ${scene.id}`);if(config.voiceover?.enabled!==false&&parts.voice)throw Error(`Voice missing/stale for ${scene.id}`);if(parts.captions)throw Error(`Captions missing/stale for ${scene.id}`);
+  if(scene.edit){
+    // Only the reviewed preview can contain editorial changes. Final render concatenates these approved previews.
+    const {renderEditedPreview}=await import('./remotion-preview.mjs');
+    const result=await renderEditedPreview(root,config,scene);
+    recordArtifact(root,state,scene,'preview',result.file,inputHashes(scene,config,sceneState(state,scene.id),root).preview);
+    return result;
+  }
   const dir=sceneDir(root,scene.id),clip=path.join(dir,'capture.mp4'),audio=path.join(dir,'voice.wav');const haveVoice=config.voiceover?.enabled!==false;
   const duration=Math.max(scene.durationSec,haveVoice?mediaSeconds(audio)+.5:0);let filters=[`fps=${config.render?.fps||30}`,`scale=${config.render?.width||1920}:${config.render?.height||1080}:force_original_aspect_ratio=decrease`,`pad=${config.render?.width||1920}:${config.render?.height||1080}:(ow-iw)/2:(oh-ih)/2`,`tpad=stop_mode=clone:stop_duration=${Math.ceil(duration+1)}`,`trim=duration=${duration}`,`setpts=PTS-STARTPTS`];
   if(config.render?.captionsBurned!==false&&scene.narration.trim())filters.push("subtitles=captions.srt:force_style='Fontsize=22,Outline=2,Alignment=2,MarginV=36'");
@@ -116,11 +123,13 @@ async function renderRemotion(root,config,state,opts){
   let bundle,selectComposition,renderMedia;
   try{({bundle}=await import('@remotion/bundler'));({selectComposition,renderMedia}=await import('@remotion/renderer'));}catch{throw Error('Remotion dependencies unavailable; npm install, or set render.engine to ffmpeg');}
   const work=path.join(avpDir(root),'remotion'),publicDir=path.join(work,'public');fs.mkdirSync(publicDir,{recursive:true});
-  const timeline=[];let from=0;
-  for(const s of config.scenes){const d=sceneDir(root,s.id),source=path.join(d,'preview.mp4');fs.copyFileSync(source,path.join(publicDir,`${s.id}.mp4`));const duration=mediaSeconds(source);timeline.push({id:s.id,from,duration,file:`${s.id}.mp4`});from+=duration;}
-  writeJson(path.join(publicDir,'timeline.json'),{scenes:timeline,total:from,fps:config.render?.fps||30,width:config.render?.width||1920,height:config.render?.height||1080});
-  const source=path.join(work,'src','index.tsx');fs.mkdirSync(path.dirname(source),{recursive:true});fs.copyFileSync(path.resolve(import.meta.dirname,'../remotion/src/index.tsx'),source);
-  const serveUrl=await bundle({entryPoint:source,publicDir});const inputProps={timeline:{scenes:timeline,total:from,fps:config.render?.fps||30,width:config.render?.width||1920,height:config.render?.height||1080}};
+  const timeline=[];const fps=config.render?.fps||30;let fromFrame=0;
+  for(const s of config.scenes){const d=sceneDir(root,s.id),source=path.join(d,'preview.mp4');fs.copyFileSync(source,path.join(publicDir,`${s.id}.mp4`));const frameCount=Math.max(1,Math.round(mediaSeconds(source)*fps));timeline.push({id:s.id,from:fromFrame/fps,duration:frameCount/fps,file:`${s.id}.mp4`});fromFrame+=frameCount;}
+  const total=fromFrame/fps;
+  writeJson(path.join(publicDir,'timeline.json'),{scenes:timeline,total,fps,width:config.render?.width||1920,height:config.render?.height||1080});
+  // Keep the entrypoint under the AVP package root so React/Remotion resolve even when projects live elsewhere.
+  const source=path.resolve(import.meta.dirname,'../remotion/src/index.tsx');
+  const serveUrl=await bundle({entryPoint:source,publicDir});const inputProps={timeline:{scenes:timeline,total,fps,width:config.render?.width||1920,height:config.render?.height||1080}};
   const composition=await selectComposition({serveUrl,id:'AVPVideo',inputProps});const out=path.join(avpDir(root),'output','final.mp4');
   await renderMedia({serveUrl,composition,inputProps,codec:'h264',audioCodec:'aac',outputLocation:out,crf:20,concurrency:2});
   return finalReport(root,config,state,'remotion',out);

@@ -18,3 +18,6 @@ Node 22+, the project's Remotion packages, available approved scene previews and
 
 ## Definition of done
 The composition loads, scene order matches approved plans, frames/timebase are consistent, and render/QA succeed. When source editing changes a reviewed scene, clear the old review or ask to unlock it.
+
+## Prefer declarative scenes
+First read `docs/scene-editing.md`. Use `scene.edit` for MathMate-style camera/shot controls and Remotion scene previews. Only create custom React composition code when the built-in primitives cannot express the desired visual; document why and retain existing scene approval gates.

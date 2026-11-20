@@ -20,3 +20,26 @@ jobs:
         run: npm test
       - name: Check environment
         run: node bin/avp.mjs doctor
+
+  remotion-scene-edit:
+    name: Render and QA an edited scene with Remotion
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: package.json
+      - name: Install FFmpeg and Remotion dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          npm install --no-audit --no-fund
+      - name: Install Remotion Headless Shell
+        run: npx remotion browser ensure
+      - name: Render actual edited preview and run media QA
+        env:
+          AVP_REMOTION_SMOKE: '1'
+        run: node --test tests/remotion-edit-smoke.test.mjs

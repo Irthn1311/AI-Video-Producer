@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
+import {editAssetNames} from './editing.mjs';
 import {avpDir,readJson,writeJson,sha,fileHash,sceneDir} from './utils.mjs';
 import {sourceFingerprint} from './inspect.mjs';
 
@@ -17,6 +19,19 @@ export function loadState(root){const file=path.join(avpDir(root),'run-state.jso
 export function saveState(root,state){state.updatedAt=stamp();writeJson(path.join(avpDir(root),'run-state.json'),state);}
 export function sceneState(state,id){return state.scenes[id]??(state.scenes[id]={artifacts:{},locked:false,approved:false});}
 
+/** Local scene media assets contribute only to preview staleness; capture/voice remain reusable. */
+function editAssetsFingerprint(scene,root){
+  if(!scene.edit||!root)return undefined;
+  return editAssetNames(scene.edit).map(name=>{
+    const file=path.join(sceneDir(root,scene.id),'assets',name+'.mp4');
+    if(!fs.existsSync(file))return {name,digest:'MISSING'};
+    // Stream chunks without materializing large video files in memory.
+    const hash=crypto.createHash('sha256'),fd=fs.openSync(file,'r'),buffer=Buffer.allocUnsafe(1024*1024);
+    try{let count;while((count=fs.readSync(fd,buffer,0,buffer.length,null))>0)hash.update(buffer.subarray(0,count));}
+    finally{fs.closeSync(fd);}
+    return {name,digest:hash.digest('hex')};
+  });
+}
 /** Capture uses a content fingerprint, not file names or file sizes. Inputs include browser settings and app origin. */
 export function inputHashes(scene,config,ss={},root){
   const artifacts=ss.artifacts||{};
@@ -24,7 +39,7 @@ export function inputHashes(scene,config,ss={},root){
     capture:sha({schema:2,capture:scene.capture,duration:scene.durationSec,appUrl:config.appUrl,viewport:{width:config.render?.width||1920,height:config.render?.height||1080,fps:config.render?.fps||30},source:root?sourceFingerprint(root,config):null,provider:'playwright-v1'}),
     voice:sha({schema:2,narration:scene.narration,voice:config.voiceover,language:config.language?.narration,modelOverride:process.env.GEMINI_TTS_MODEL||null}),
     captions:sha({schema:2,narration:scene.narration,language:config.language?.subtitles,voiceEnabled:config.voiceover?.enabled!==false,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null}),
-    preview:sha({schema:2,render:config.render,duration:scene.durationSec,style:config.style||{},captureHash:artifacts.capture?.hash,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null,captionHash:artifacts.captions?.hash})
+    preview:sha({schema:2,render:config.render,duration:scene.durationSec,style:config.style||{},edit:scene.edit,editAssets:editAssetsFingerprint(scene,root),captureHash:artifacts.capture?.hash,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null,captionHash:artifacts.captions?.hash})
   };
 }
 export function staleParts(scene,config,ss,root){

@@ -55,6 +55,10 @@ flowchart LR
 
 The first module is **`software-demo`**. The architecture leaves room for future explainer and marketing-video modules. AVP v0.1 is an extensible toolkit, **not a hosted or fully autonomous video service**.
 
+## Verified browser captures
+
+Individual scenes can opt into local Playwright DOM/API assertions with `capture.evidencePolicy.requireAssertions=true`. The capture report is bound to scene QA, preventing an old reviewed video from staying approved after evidence is changed. This validates explicitly configured outcomes, not all narration claims. See [Capture Evidence](docs/capture-evidence.md).
+
 ## MathMate-inspired scene editing
 
 Scenes may opt into declarative Remotion editing with source trims, playback speed, zoom/focus, held final frames, chapter labels, callouts and secondary footage insets. Edited scenes are rendered as previews **before** technical QA and human approval; unedited scenes keep the fast FFmpeg workflow. See [Scene Editing](docs/scene-editing.md).

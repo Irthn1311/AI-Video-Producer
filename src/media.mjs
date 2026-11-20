@@ -3,6 +3,7 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {run,readJson,writeJson,sceneDir,avpDir,loadEnv,sha,atomicWrite,fileHash} from './utils.mjs';
 import {recordArtifact,inputHashes,sceneState,saveState,requireUnlocked,staleParts,gate,validateSceneQa,sceneApprovalValid,finalInputHash, invalidateOutput,reservePaidCall} from './state.mjs';
+import {executeCaptureAssertion,captureEvidencePassed} from './capture-assertions.mjs';
 const seconds=(value)=>Number(value||0);
 export function probe(file){return JSON.parse(run('ffprobe',['-v','error','-show_format','-show_streams','-of','json',file]));}
 export function mediaSeconds(file){return seconds(probe(file).format?.duration);}
@@ -11,8 +12,8 @@ export async function capture(root,config,scene,state,opts={}){
   const ss=sceneState(state,scene.id);requireUnlocked(state,scene.id);const parts=staleParts(scene,config,ss,root);if(!parts.capture&&!opts.force)return {reused:true,file:path.join(sceneDir(root,scene.id),'capture.mp4')};
   let chromium;try{({chromium}=await import('@playwright/test'));}catch{throw Error('Playwright not installed. Run npm install, then npx playwright install chromium.');}
   const dir=sceneDir(root,scene.id);fs.mkdirSync(dir,{recursive:true});const raw=path.join(dir,'raw');fs.mkdirSync(raw,{recursive:true});
-  const browser=await chromium.launch({headless:true});let ctx;const report={scene:scene.id,actions:[],startedAt:new Date().toISOString()};
-  try{ctx=await browser.newContext({viewport:{width:config.render?.width||1920,height:config.render?.height||1080},recordVideo:{dir:raw,size:{width:config.render?.width||1920,height:config.render?.height||1080}}});const page=await ctx.newPage();const pageErrors=[];page.on('pageerror',err=>pageErrors.push(err.message));const start=Date.now();
+  const browser=await chromium.launch({headless:true});let ctx;const report={scene:scene.id,actions:[],assertions:[],status:'IN_PROGRESS',startedAt:new Date().toISOString()};
+  try{ctx=await browser.newContext({viewport:{width:config.render?.width||1920,height:config.render?.height||1080},recordVideo:{dir:raw,size:{width:config.render?.width||1920,height:config.render?.height||1080}}});const page=await ctx.newPage();const pageErrors=[];report.pageErrors=pageErrors;page.on('pageerror',err=>pageErrors.push(err.message.slice(0,500)));const start=Date.now();
     for(const a of scene.capture.actions){const startAction=Date.now();switch(a.type){
       case 'goto': {const url=new URL(a.path||'/',config.appUrl);const allowed=new URL(config.appUrl);if(url.origin!==allowed.origin)throw Error('Cross-origin navigation blocked for capture');await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:60000});break;}
       case 'click':await locator(page,a).click({timeout:30000});break;
@@ -22,14 +23,33 @@ export async function capture(root,config,scene,state,opts={}){
       case 'pause':await page.waitForTimeout(Math.max(0,Math.min(a.ms||500,15000)));break;
       case 'scroll':await page.mouse.wheel(0,a.y||500);break;
       case 'screenshot':await page.screenshot({path:path.join(dir,`${scene.id}-${report.actions.length}.png`)});break;
+      case 'assertVisible':
+      case 'assertText':
+      case 'assertAttribute':
+      case 'clickExpectResponse': {
+        const evidence=await executeCaptureAssertion(page,a,locator,config.appUrl);
+        report.assertions.push(evidence);
+        if(a.evidenceScreenshot===true){
+          const name='evidence-'+report.assertions.length+'.png';
+          await page.screenshot({path:path.join(dir,name)});
+          evidence.screenshot=name;
+        }
+        break;
+      }
       default:throw Error('Unsupported capture action: '+a.type);
     }report.actions.push({type:a.type,ms:Date.now()-startAction});}
     let remaining=scene.durationSec*1000-(Date.now()-start);if(remaining>0)await page.waitForTimeout(remaining);
     report.finalUrl=page.url();report.pageErrors=pageErrors;report.elapsedMs=Date.now()-start;
+    if(scene.capture.evidencePolicy?.requireAssertions&&report.assertions.length===0)throw Error('Missing required browser assertions');
+    if(scene.capture.evidencePolicy?.failOnPageError!==false&&scene.capture.evidencePolicy?.requireAssertions&&pageErrors.length)
+      throw Error('Browser emitted '+pageErrors.length+' uncaught page error(s); evidence rejected');
     const video=page.video();await ctx.close();ctx=null;const rawPath=await video.path();
     const output=path.join(dir,'capture.mp4');const tmp=path.join(dir,'capture.new.mp4');run('ffmpeg',['-y','-v','error','-i',rawPath,'-vf',`fps=${config.render?.fps||30},scale=${config.render?.width||1920}:${config.render?.height||1080}:force_original_aspect_ratio=decrease,pad=${config.render?.width||1920}:${config.render?.height||1080}:(ow-iw)/2:(oh-ih)/2`,'-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p','-an',tmp]);fs.renameSync(tmp,output);
-    const h=inputHashes(scene,config,sceneState(state,scene.id),root);recordArtifact(root,state,scene,'capture',output,h.capture);report.outputDuration=mediaSeconds(output);writeJson(path.join(dir,'capture-report.json'),report);return {file:output,report};
-  }catch(e){report.error=e.message;writeJson(path.join(dir,'capture-report.json'),report);throw e;}finally{if(ctx)await ctx.close();await browser.close();}
+    const h=inputHashes(scene,config,sceneState(state,scene.id),root);recordArtifact(root,state,scene,'capture',output,h.capture);report.outputDuration=mediaSeconds(output);report.status='PASS';writeJson(path.join(dir,'capture-report.json'),report);return {file:output,report};
+   }catch(e){report.status='FAIL';report.error=String(e.message).slice(0,750);
+    // Keep a local failure screenshot; do not copy private page text or network bodies into reports.
+    try{if(ctx){const pages=ctx.pages();if(pages.length){const file=path.join(dir,'capture-failure.png');await pages[0].screenshot({path:file,timeout:6000});report.failureScreenshot='capture-failure.png';}}}catch{}
+    writeJson(path.join(dir,'capture-report.json'),report);throw e;}finally{if(ctx)await ctx.close();await browser.close();}
 }
 function wavFromPcm(pcm,sampleRate=24000){const b=Buffer.alloc(44);b.write('RIFF',0);b.writeUInt32LE(pcm.length+36,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(sampleRate,24);b.writeUInt32LE(sampleRate*2,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(pcm.length,40);return Buffer.concat([b,pcm]);}
 export async function voice(root,config,scene,state,opts={}){
@@ -87,7 +107,11 @@ export function qaScene(root,config,scene,state){
   const target=Math.max(scene.durationSec,config.voiceover?.enabled!==false&&fs.existsSync(path.join(dir,'voice.wav'))?mediaSeconds(path.join(dir,'voice.wav'))+.5:0);
   const decode=run('ffmpeg',['-v','error','-i',file,'-f','null','-']);
   const checks={videoH264:v?.codec_name==='h264',width:v?.width===(config.render?.width||1920),height:v?.height===(config.render?.height||1080),audioAAC:a?.codec_name==='aac',duration:Math.abs(mediaSeconds(file)-target)<.3,captionsExist:fs.existsSync(path.join(dir,'captions.srt')),fullDecode:decode!==null};
-  const report={scene:scene.id,checks,pass:Object.values(checks).every(Boolean),durationSec:mediaSeconds(file),captionTiming:'Estimated unless externally aligned',visualReviewByHuman:false,previewHash:fileHash(file),previewInputHash:inputHashes(scene,config,ss,root).preview};
+  const evidenceRequired=scene.capture.evidencePolicy?.requireAssertions===true;
+  const captureReportFile=path.join(dir,'capture-report.json');
+  const captureReport=evidenceRequired&&fs.existsSync(captureReportFile)?readJson(captureReportFile):null;
+  if(evidenceRequired)checks.captureAssertions=captureEvidencePassed(captureReport,scene.capture.evidencePolicy);
+  const report={scene:scene.id,checks,pass:Object.values(checks).every(Boolean),durationSec:mediaSeconds(file),captionTiming:'Estimated unless externally aligned',visualReviewByHuman:false,previewHash:fileHash(file),previewInputHash:inputHashes(scene,config,ss,root).preview,...(evidenceRequired?{captureReportHash:captureReport?fileHash(captureReportFile):null}: {})};
   const reportFile=path.join(dir,'qa-report.json');writeJson(reportFile,report);ss.qa={reportHash:fileHash(reportFile),previewHash:report.previewHash,previewInputHash:report.previewInputHash};ss.approved=false;
   invalidateOutput(state);saveState(root,state);return report;
 }

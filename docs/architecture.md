@@ -1,5 +1,9 @@
 # Architecture: agent-first, local-first and scene-first
 
+## Capture evidence and opt-in semantic safeguards
+
+`src/capture-assertions.mjs` adds local Playwright assertion actions for DOM and same-origin HTTP responses. When an individual scene enables `capture.evidencePolicy.requireAssertions`, technical scene QA requires a PASS capture report and binds the report hash to scene approval. This is runtime proof of the specified assertions, not a general proof of truthful narration. See [Capture Evidence](capture-evidence.md).
+
 ## Opt-in scene editing and preview parity
 
 The new `src/editing.mjs` module validates a frame-accurate scene-edit contract (source trims, speed, zoom/focus, hold, callouts, insets). `src/remotion-preview.mjs` renders opted-in scenes with `remotion/src/scene-preview.tsx`; scenes without `scene.edit` preserve FFmpeg previews. Because this happens **before** QA/review, a later final render can only consume already-reviewed edited previews. External secondary footage comes exclusively from named local assets, with hashes included in preview staleness. See [Scene Editing](scene-editing.md).

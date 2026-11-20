@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {editAssetNames} from './editing.mjs';
+import {captureEvidencePassed} from './capture-assertions.mjs';
 import {avpDir,readJson,writeJson,sha,fileHash,sceneDir} from './utils.mjs';
 import {sourceFingerprint} from './inspect.mjs';
 
@@ -75,6 +76,12 @@ export function validateSceneQa(root,config,scene,state){
   if(!fs.existsSync(p)||!ss.qa)throw Error(`Scene ${scene.id} lacks current QA evidence. Run avp qa --scene ${scene.id}`);
   const report=readJson(p),previewFile=path.join(sceneDir(root,scene.id),'preview.mp4');
   if(!report.pass||!report.checks||!Object.values(report.checks).every(Boolean))throw Error(`Scene ${scene.id} QA failed`);
+  if(scene.capture.evidencePolicy?.requireAssertions===true){
+    const evidenceFile=path.join(sceneDir(root,scene.id),'capture-report.json');
+    if(!fs.existsSync(evidenceFile)||report.captureReportHash!==fileHash(evidenceFile)
+      ||!captureEvidencePassed(readJson(evidenceFile),scene.capture.evidencePolicy))
+      throw Error(`Scene ${scene.id} capture evidence is missing, invalid or stale`);
+  }
   const expected=inputHashes(scene,config,ss,root).preview;
   if(report.previewHash!==fileHash(previewFile)||report.previewInputHash!==expected||ss.qa.previewHash!==report.previewHash||ss.qa.previewInputHash!==expected||ss.qa.reportHash!==fileHash(p))throw Error(`Scene ${scene.id} QA is stale or does not match current preview. Rerun avp qa`);
   return report;

@@ -39,6 +39,10 @@ Ghép và xuất MP4
 | **Rendering** | FFmpeg; tùy chọn backend Remotion |
 | **QA** | Kiểm tra kỹ thuật và lưu bằng chứng theo cảnh |
 
+## Kiểm chứng hành vi ứng dụng khi quay
+
+AVP có thể cấu hình kiểm tra DOM và response API thật bằng Playwright trong lúc quay cảnh: `capture.evidencePolicy.requireAssertions=true`. Báo cáo `capture-report.json` gắn hash với scene QA; sửa bằng chứng sau khi duyệt khiến QA không còn hợp lệ. Đây là kiểm chứng **các điều kiện được khai báo**, chưa thay thế hoàn toàn Semantic QA. Xem [Capture Evidence](docs/capture-evidence.md).
+
 ## Dựng cảnh nâng cao từ kinh nghiệm MathMate
 
 Từng scene có thể chọn chế độ biên tập Remotion qua `scene.edit`: cắt clip, thay tốc độ footage (giữ nguyên giọng đọc), zoom/focus, giữ frame cuối, nhãn chương, callout và video phụ (inset). **Preview được dựng trước khi QA/duyệt**, nên video cuối dùng đúng những cảnh đã kiểm tra. Cảnh không dùng `edit` vẫn chạy FFmpeg nhanh gọn. Xem [hướng dẫn Scene Editing](docs/scene-editing.md).

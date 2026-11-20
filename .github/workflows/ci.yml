@@ -43,3 +43,9 @@ jobs:
         env:
           AVP_REMOTION_SMOKE: '1'
         run: node --test tests/remotion-edit-smoke.test.mjs
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+      - name: Capture real browser actions, verify network/DOM evidence and run QA
+        env:
+          AVP_BROWSER_SMOKE: '1'
+        run: node --test tests/browser-evidence-smoke.test.mjs

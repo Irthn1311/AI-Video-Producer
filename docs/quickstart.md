@@ -31,6 +31,10 @@ Set `language.script`, `language.narration` (e.g. `vi-VN`, `en-US`) and `languag
 
 When `voiceover.enabled=true`, the captions stage measures silence in `voice.wav` with FFmpeg and produces an SRT and `captions.json` with timing provenance. Use `scene.captionTiming` for manual sentence anchors in important scenes; read [Audio Captions](audio-captions.md). The resulting timing is **not forced word alignment**. TTS audio is reused when only caption timing changes.
 
+## Scene versions and rollback
+
+Before changing a working scene, consider `avp snapshot --scene <id> --label "before edit"`. Inspect `avp versions --scene <id>`, unlock the scene if it is approved, and use `avp restore --scene <id> --version v0001 --confirm` to recover an older version. Restoring does **not** restore QA or scene approval; rebuild if stale, rerun QA and approve. See [Scene Versions](scene-versions.md).
+
 ## Revision workflow
 
 Before changing a scene, unlock it (`avp unlock --scene <id>`). Update its `project.json` scene config. `avp status` shows stale steps; use `run` to regenerate only affected steps. Changes inside `sourcePath` invalidate cached capture based on file content, even if file sizes are unchanged; run `avp status` and rebuild after unlocking the affected scene. For runtime changes outside `sourcePath`, use `capture --force` and then rebuild preview/QA as needed. Restoring a previous scene is currently manual—store versioned backups outside `.avp` first. `avp render` uses only reviewed current scene previews.

@@ -23,3 +23,6 @@ Use `production-optimizer` to evaluate cache and affected downstream artifacts. 
 
 ## Deliverables
 Feature evidence, approved storyboard, per-scene footage/audio/captions and QA, final MP4, source project and an accurate status/limitations report.
+
+## Reversible scene edits
+Use `docs/scene-versions.md` when a human requests rollback of a damaged scene. Save a snapshot before modifying valuable approved media, obtain explicit permission before restore, and run QA and approval again afterward. Snapshotting is local-only, not continuous autosave.

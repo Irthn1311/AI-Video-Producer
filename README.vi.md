@@ -39,6 +39,10 @@ Ghép và xuất MP4
 | **Rendering** | FFmpeg; tùy chọn backend Remotion |
 | **QA** | Kiểm tra kỹ thuật và lưu bằng chứng theo cảnh |
 
+## Snapshot và rollback từng cảnh
+
+Dùng `avp snapshot --scene ID` để lưu phiên bản media cục bộ, `avp versions` để xem lịch sử và `avp restore --scene ID --version v0001 --confirm` để khôi phục cảnh đã unlock. AVP xác minh hash của file, tự sao lưu phiên bản trước khi khôi phục và **luôn yêu cầu QA/duyệt lại sau rollback**. Không gọi lại Gemini hoặc Playwright chỉ để lấy lại phiên bản cũ. [Hướng dẫn](docs/scene-versions.md).
+
 ## Phụ đề bám theo âm thanh thực tế
 
 Khi có voiceover, AVP đo các khoảng nói/nghỉ trong WAV bằng FFmpeg để **ước lượng mốc câu** hợp lý hơn so với chia đều theo độ dài chữ. Có thể dùng `captionTiming.anchors` để khai báo mốc đã nghe/duyệt thủ công như workflow MathMate. SRT và `captions.json` đều có hash ràng buộc với QA; thay phụ đề không cần gọi lại Gemini. Đây **không phải forced alignment cấp từ**. [Hướng dẫn](docs/audio-captions.md).

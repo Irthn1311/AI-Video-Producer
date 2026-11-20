@@ -11,12 +11,16 @@
 - `plan` generates schema-aligned drafts; an AI agent must inspect the product and author the screenplay, narration and verify feature coverage.
 - Browser recording requires installed Playwright/Chromium and a running demo application. Paid speech synthesis requires a provider key and explicit opt-in. Subtitle timing is now silence-aware for spoken scenes or human-anchored on request; **these are still not ASR/forced word-level alignment**, and visual/audio review remains required.
 - `--allow-paid-api` is required for paid TTS. The CLI enforces an estimated per-call and project reservation budget **before network requests**, but estimates cannot cap the provider's real invoice. Retry caps are policy guidance; there is no general job scheduler.
-- Scene history and automatic restore of old media versions are not implemented. Capture hashes include source content, app URL and viewport to detect changes inside the configured source scope; runtime/browser changes outside that scope still require explicit review. Scene locks protect the current approved artifacts.
+- Local explicit scene snapshots and restore are implemented; automatic capture-stage checkpoints, retention pruning and fully transactional rollback remain open. Capture hashes include source content, app URL and viewport to detect changes inside the configured source scope; runtime/browser changes outside that scope still require explicit review. Scene locks protect the current approved artifacts.
 - Automatic agent self-healing and robust true-cost accounting are future milestones.
 
 ## Quality-first capability routing baseline
 
 The project includes a declarative capability registry and non-executing `avp route` preflight with Quality as the default policy. It labels required tools, deferred MCP/Graphify escalation, semantic review requirements and estimated paid API budget. It does not measure Coding Agent subscription quota or automatically enforce capability decisions inside the existing production commands.
+
+## Scene snapshots and manual rollback
+
+AVP can snapshot scene media, evidence and caption metadata into local versioned folders, verify original file checksums and restore after an explicit unlock/confirm. Restoring clears scene/final approval and requires QA again. Automatic revision snapshots on each production step, retention/pruning and fine-grained source dependencies are not yet implemented.
 
 ## Audio timing parity
 

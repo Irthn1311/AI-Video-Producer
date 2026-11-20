@@ -55,6 +55,10 @@ flowchart LR
 
 The first module is **`software-demo`**. The architecture leaves room for future explainer and marketing-video modules. AVP v0.1 is an extensible toolkit, **not a hosted or fully autonomous video service**.
 
+## Local scene snapshots and rollback
+
+Save a local revision with `avp snapshot --scene ID`, list versions with `avp versions`, and restore an unlocked scene using `avp restore --scene ID --version v0001 --confirm`. The restore verifies SHA-256 media checksums, saves a pre-restore backup and **never revives QA, review or publishing approval automatically**. [Guide](docs/scene-versions.md).
+
 ## Speech-aware captions
 
 When voiceover is enabled, AVP uses local FFmpeg silence analysis to propose sentence caption timings instead of blindly distributing text over the whole clip. Optional reviewed `captionTiming.anchors` reproduce the MathMate-style human-audited method. JSON and SRT timings are both hashed for QA/review integrity; no extra AI call is made. **These are silence-aware estimates, not true forced alignment.** [Details](docs/audio-captions.md).

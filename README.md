@@ -57,7 +57,7 @@ The first module is **`software-demo`**. The architecture leaves room for future
 
 ## Evidence-backed feature claims
 
-An optional strict `verification.mode: "claims"` workflow binds each narrated feature claim to explicit Playwright assertion IDs, validates the feature-coverage candidate plan, and requires the current capture report/footage hashes to agree during scene QA and rendering. Inspect local status with `avp evidence`. This does **not** replace independent semantic/editorial review. Read [Claim Evidence](docs/claim-evidence.md).
+New projects and the sample use strict `verification.mode: "claims"` by default (legacy projects remain unchanged). This workflow binds each narrated feature claim to explicit Playwright assertion IDs, validates the feature-coverage candidate plan, and requires the current capture report/footage hashes to agree during scene QA and rendering. Inspect local status with `avp evidence`. This does **not** replace independent semantic/editorial review. Read [Claim Evidence](docs/claim-evidence.md).
 
 ## Verified browser captures
 

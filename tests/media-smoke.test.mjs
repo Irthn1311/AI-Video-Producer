@@ -20,6 +20,9 @@ test('technical scene lifecycle: attach → captions → preview → QA → appr
     const root=path.join(dir,'project');fs.mkdirSync(root);
     fs.mkdirSync(path.join(root,'app'));fs.writeFileSync(path.join(root,'app','page.tsx'),'export const Page = 1;');
     const config=readJson(path.join(repo,'templates','project.json'));
+    // Synthetic attached footage is not runtime evidence. Explicitly exercise backwards compatibility.
+    config.verification={mode:'legacy'};
+    for(const scene of config.scenes)delete scene.claims;
     config.sourcePath='app';config.review.mode='review';config.voiceover.enabled=false;config.render={engine:'ffmpeg',width:320,height:180,fps:24,captionsBurned:false};config.scenes=[{...config.scenes[0],durationSec:2}];
     writeJson(path.join(root,'project.json'),config);
     const cli=(...args)=>execute('node',[path.join(repo,'bin','avp.mjs'),...args,'--project',root]);

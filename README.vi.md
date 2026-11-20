@@ -41,7 +41,7 @@ Ghép và xuất MP4
 
 ## Liên kết lời thoại với bằng chứng
 
-Có thể bật `verification.mode: "claims"` để buộc mỗi tính năng được giới thiệu phải có một đoạn lời thoại đã khai báo, dẫn tới các assertion Playwright thật. Scene QA kiểm tra hash của capture và evidence hiện tại; `avp evidence` hiển thị phần nào đã/chưa xác minh. Đây là kiểm chứng theo điều kiện khai báo, **chưa phải đánh giá ngữ nghĩa tự động hoàn chỉnh**. Xem [Claim Evidence](docs/claim-evidence.md).
+Các project mới khởi tạo và project ví dụ mặc định bật `verification.mode: "claims"` (project cũ vẫn giữ tương thích). Chế độ này để buộc mỗi tính năng được giới thiệu phải có một đoạn lời thoại đã khai báo, dẫn tới các assertion Playwright thật. Scene QA kiểm tra hash của capture và evidence hiện tại; `avp evidence` hiển thị phần nào đã/chưa xác minh. Đây là kiểm chứng theo điều kiện khai báo, **chưa phải đánh giá ngữ nghĩa tự động hoàn chỉnh**. Xem [Claim Evidence](docs/claim-evidence.md).
 
 ## Kiểm chứng hành vi ứng dụng khi quay
 

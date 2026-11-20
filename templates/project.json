@@ -59,6 +59,12 @@
             "name": "Learning Dashboard"
           },
           {
+            "type": "assertVisible",
+            "role": "heading",
+            "name": "Learning Dashboard",
+            "evidenceId": "dashboard-heading"
+          },
+          {
             "type": "hover",
             "testId": "overview-card"
           },
@@ -66,8 +72,22 @@
             "type": "pause",
             "ms": 1800
           }
-        ]
-      }
+        ],
+        "evidencePolicy": {
+          "requireAssertions": true,
+          "failOnPageError": true
+        }
+      },
+      "claims": [
+        {
+          "id": "dashboard-claim",
+          "featureId": "dashboard",
+          "text": "our sample learning dashboard",
+          "evidenceIds": [
+            "dashboard-heading"
+          ]
+        }
+      ]
     },
     {
       "id": "scene-02-feature",
@@ -93,6 +113,13 @@
             "testId": "result-card"
           },
           {
+            "type": "assertText",
+            "testId": "result-card",
+            "expectedText": "Demo result: Your lesson is now ready!",
+            "evidenceId": "demo-result-visible",
+            "evidenceScreenshot": true
+          },
+          {
             "type": "hover",
             "testId": "result-card"
           },
@@ -100,11 +127,28 @@
             "type": "pause",
             "ms": 2000
           }
-        ]
-      }
+        ],
+        "evidencePolicy": {
+          "requireAssertions": true,
+          "failOnPageError": true
+        }
+      },
+      "claims": [
+        {
+          "id": "result-claim",
+          "featureId": "demo-action",
+          "text": "see an authentic result appear",
+          "evidenceIds": [
+            "demo-result-visible"
+          ]
+        }
+      ]
     }
   ],
   "optimization": {
     "profile": "quality"
+  },
+  "verification": {
+    "mode": "claims"
   }
 }

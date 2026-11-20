@@ -11,7 +11,11 @@ import {render} from '../src/media.mjs';
 const template=readJson(new URL('../templates/project.json',import.meta.url));
 function fixture(){
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'avp-test-'));
-  const config=structuredClone(template);config.sourcePath='src';config.render={engine:'ffmpeg',width:640,height:360,fps:24,captionsBurned:false};
+  const config=structuredClone(template);
+  // Deliberate legacy fixture: synthetic media carries no real browser evidence.
+  config.verification={mode:'legacy'};
+  for(const scene of config.scenes)delete scene.claims;
+  config.sourcePath='src';config.render={engine:'ffmpeg',width:640,height:360,fps:24,captionsBurned:false};
   fs.mkdirSync(path.join(root,'src'));fs.writeFileSync(path.join(root,'src','main.ts'),'export const n = 1;');
   writeJson(path.join(avpDir(root),'planning','feature-coverage.json'),{schemaVersion:1,features:[]});
   writeJson(path.join(avpDir(root),'planning','storyboard.json'),{schemaVersion:1,scenes:config.scenes.map(s=>({id:s.id,title:s.title,durationSec:s.durationSec,featureIds:s.featureIds||[],narration:s.narration,actions:s.capture.actions}))});

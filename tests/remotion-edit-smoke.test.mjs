@@ -23,6 +23,9 @@ test('actual Remotion scene edit renders authentic-source MP4, keeps audio track
     fs.mkdirSync(path.join(root,'app'));
     fs.writeFileSync(path.join(root,'app','index.js'),'export const demo=true;');
     const config=readJson(path.join(repo,'templates','project.json'));
+    // Synthetic source clips are valid render fixtures, not verified product behavior.
+    config.verification={mode:'legacy'};
+    for(const scene of config.scenes)delete scene.claims;
     config.sourcePath='app';config.review.mode='autonomous';config.voiceover.enabled=false;
     config.render={engine:'ffmpeg',width:320,height:180,fps:24,captionsBurned:true};
     config.scenes=[{

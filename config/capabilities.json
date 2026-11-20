@@ -1,0 +1,304 @@
+{
+  "schemaVersion": 1,
+  "defaultProfile": "quality",
+  "bundled": [
+    "avp-inspect",
+    "storyboard-skill",
+    "human-review"
+  ],
+  "profiles": {
+    "quality": {
+      "priority": "verified evidence, semantic correctness, recoverability, then quota efficiency",
+      "semanticReview": "independent verification for video QA; human checkpoint if no independent agent verifier",
+      "escalations": "on-demand only; high-risk verification required, no blind multi-agent calls",
+      "quota": "reuse verified artifacts; use deterministic tools before model calls; request permission for paid APIs",
+      "checkpoints": [
+        "feature-coverage",
+        "storyboard",
+        "each-scene",
+        "final"
+      ],
+      "maxAutomaticRetriesPerFailedStage": 2
+    },
+    "balanced": {
+      "priority": "correctness with targeted deeper checks when high risk",
+      "semanticReview": "mandatory for high-risk outputs; review on uncertainty",
+      "escalations": "on-demand for complex findings or failures",
+      "quota": "prefer cached artifacts and local commands",
+      "checkpoints": [
+        "feature-coverage",
+        "storyboard",
+        "each-scene",
+        "final"
+      ],
+      "maxAutomaticRetriesPerFailedStage": 1
+    },
+    "economy": {
+      "priority": "validated minimum workflow with low context and paid cost",
+      "semanticReview": "never claim a feature verified without runtime evidence; review uncertainty",
+      "escalations": "only on failures or explicit request",
+      "quota": "local search and cached output first",
+      "checkpoints": [
+        "feature-coverage",
+        "storyboard",
+        "each-scene",
+        "final"
+      ],
+      "maxAutomaticRetriesPerFailedStage": 0
+    }
+  },
+  "capabilities": {
+    "avp-inspect": {
+      "kind": "cli",
+      "privacy": "local",
+      "cost": "none",
+      "load": "node bin/avp.mjs inspect --project <dir>"
+    },
+    "ripgrep": {
+      "kind": "cli",
+      "privacy": "local",
+      "cost": "none",
+      "load": "rg --files; rg -n <targeted-pattern>"
+    },
+    "serena-mcp": {
+      "kind": "mcp",
+      "privacy": "local-or-host-dependent",
+      "cost": "tool-context",
+      "load": "Load Serena MCP on demand in the host agent"
+    },
+    "graphify-cli": {
+      "kind": "cli",
+      "privacy": "local-code-only",
+      "cost": "setup",
+      "load": ".agents/skills/graphify/SKILL.md; install graphifyy separately if justified"
+    },
+    "playwright-runtime": {
+      "kind": "cli",
+      "privacy": "local",
+      "cost": "none",
+      "load": ".agents/skills/browser-capture/SKILL.md"
+    },
+    "chrome-devtools-mcp": {
+      "kind": "mcp",
+      "privacy": "local-or-host-dependent",
+      "cost": "tool-context",
+      "load": "Load Chrome DevTools MCP on failed browser/network diagnosis"
+    },
+    "agent-visual-review": {
+      "kind": "agent",
+      "privacy": "model-dependent",
+      "cost": "model-quota",
+      "load": ".agents/skills/video-qa/SKILL.md"
+    },
+    "human-review": {
+      "kind": "human",
+      "privacy": "local",
+      "cost": "human-time",
+      "manual": true,
+      "load": ".agents/skills/video-qa/SKILL.md"
+    },
+    "storyboard-skill": {
+      "kind": "skill",
+      "privacy": "local",
+      "cost": "host-agent-context",
+      "load": ".agents/skills/storyboard-planner/SKILL.md"
+    },
+    "ffprobe-qa": {
+      "kind": "cli",
+      "privacy": "local",
+      "cost": "none",
+      "load": "node bin/avp.mjs qa --project <dir> --scene <id>"
+    },
+    "whisperx-local": {
+      "kind": "cli",
+      "privacy": "local",
+      "cost": "compute",
+      "load": "Install a supported local aligner separately; inspect .agents/skills/avp-remotion-captions/SKILL.md"
+    },
+    "gemini-tts": {
+      "kind": "provider",
+      "privacy": "external",
+      "cost": "paid-api",
+      "paid": true,
+      "load": ".agents/skills/ai-voiceover/SKILL.md"
+    },
+    "ffmpeg-render": {
+      "kind": "cli",
+      "privacy": "local",
+      "cost": "compute",
+      "load": "node bin/avp.mjs render --project <dir>"
+    },
+    "remotion-render": {
+      "kind": "cli",
+      "privacy": "local",
+      "cost": "compute",
+      "load": ".agents/skills/avp-remotion-workflow/SKILL.md"
+    }
+  },
+  "tasks": {
+    "repo-research": [
+      {
+        "id": "static-inventory",
+        "required": true,
+        "when": "always",
+        "candidates": [
+          "avp-inspect"
+        ],
+        "evidence": "source file hashes, symbol and route pointers"
+      },
+      {
+        "id": "targeted-search",
+        "required": false,
+        "when": "if-available",
+        "candidates": [
+          "ripgrep"
+        ],
+        "evidence": "targeted source references only"
+      },
+      {
+        "id": "complex-symbol-lookup",
+        "required": false,
+        "when": "complex",
+        "candidates": [
+          "serena-mcp",
+          "graphify-cli"
+        ],
+        "evidence": "bounded symbol graph; never read entire repository"
+      }
+    ],
+    "feature-verification": [
+      {
+        "id": "runtime-observation",
+        "required": true,
+        "when": "always",
+        "candidates": [
+          "playwright-runtime"
+        ],
+        "evidence": "actual UI action, expected result, screenshot or DOM assertion"
+      },
+      {
+        "id": "independent-review",
+        "required": true,
+        "when": "quality-or-high-risk",
+        "candidates": [
+          "agent-visual-review",
+          "human-review"
+        ],
+        "evidence": "independent assessment of feature truthfulness; unresolved claims remain unverified"
+      }
+    ],
+    "storyboard": [
+      {
+        "id": "storyboard-instructions",
+        "required": true,
+        "when": "always",
+        "candidates": [
+          "storyboard-skill"
+        ],
+        "evidence": "scene IDs, verified features and reviewable plan"
+      },
+      {
+        "id": "plan-approval",
+        "required": true,
+        "when": "quality",
+        "candidates": [
+          "human-review"
+        ],
+        "evidence": "human approval tied to current plan hash"
+      }
+    ],
+    "runtime-diagnosis": [
+      {
+        "id": "browser-runtime",
+        "required": true,
+        "when": "always",
+        "candidates": [
+          "playwright-runtime"
+        ],
+        "evidence": "capture report and browser console"
+      },
+      {
+        "id": "network-escalation",
+        "required": false,
+        "when": "if-available",
+        "candidates": [
+          "chrome-devtools-mcp"
+        ],
+        "evidence": "network/console traces only if a failure warrants it"
+      }
+    ],
+    "video-qa": [
+      {
+        "id": "technical-qa",
+        "required": true,
+        "when": "always",
+        "candidates": [
+          "ffprobe-qa"
+        ],
+        "evidence": "video/audio codec, duration, decode, artifact hashes"
+      },
+      {
+        "id": "semantic-qa",
+        "required": true,
+        "when": "quality-or-high-risk",
+        "candidates": [
+          "agent-visual-review",
+          "human-review"
+        ],
+        "evidence": "narration vs verified feature and observed footage"
+      },
+      {
+        "id": "final-review",
+        "required": true,
+        "when": "quality",
+        "candidates": [
+          "human-review"
+        ],
+        "evidence": "current video preview and review decision"
+      }
+    ],
+    "captions": [
+      {
+        "id": "alignment",
+        "required": true,
+        "when": "quality",
+        "candidates": [
+          "whisperx-local"
+        ],
+        "evidence": "speech-aligned timings; no estimated timing presented as aligned"
+      },
+      {
+        "id": "timing-review",
+        "required": true,
+        "when": "always",
+        "candidates": [
+          "human-review"
+        ],
+        "evidence": "subtitle language, timing and legibility"
+      }
+    ],
+    "voice": [
+      {
+        "id": "paid-tts-preflight",
+        "required": true,
+        "when": "always",
+        "candidates": [
+          "gemini-tts"
+        ],
+        "evidence": "explicit consent, estimated budget and script checksum before network"
+      }
+    ],
+    "render": [
+      {
+        "id": "renderer",
+        "required": true,
+        "when": "always",
+        "candidates": [
+          "ffmpeg-render",
+          "remotion-render"
+        ],
+        "evidence": "approved previews and final output QA"
+      }
+    ]
+  }
+}

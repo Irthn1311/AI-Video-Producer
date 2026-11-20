@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {validateClaimConfig,validateCoveragePlan,verifySceneClaims,inspectEvidence} from '../src/evidence.mjs';
-import {writeJson,sceneDir} from '../src/utils.mjs';
+import {writeJson,sceneDir,fileHash} from '../src/utils.mjs';
+import {inputHashes,staleParts} from '../src/state.mjs';
 
 function fixture(){
   const scene={id:'feature-demo',durationSec:5,featureIds:['save'],
@@ -60,5 +61,29 @@ test('inspect is honest about unavailable evidence and unknown legacy mode',()=>
     assert.equal(result.ready,false);
     assert.equal(result.scenes[0].status,'UNVERIFIED');
     assert.equal(inspectEvidence(root,{scenes:c.scenes},{scenes:{}}).mode,'legacy');
+  }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('evidence status rejects stale source even with a previously passing capture report',()=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'avp-proof-freshness-'));
+  try{
+    const config=fixture(),scene=config.scenes[0];config.sourcePath='app';
+    const src=path.join(root,'app');fs.mkdirSync(src);fs.writeFileSync(path.join(src,'main.ts'),'export const version = 1;');
+    config.appUrl='http://127.0.0.1:4173';config.render={width:320,height:180,fps:24};
+    const dir=sceneDir(root,scene.id);fs.mkdirSync(dir,{recursive:true});
+    const footage=path.join(dir,'capture.mp4');fs.writeFileSync(footage,'real fixture bytes, not a playable media test');
+    const state={scenes:{[scene.id]:{artifacts:{capture:{file:'capture.mp4',
+      hash:fileHash(footage),inputHash:''}}}}};
+    state.scenes[scene.id].artifacts.capture.inputHash=inputHashes(scene,config,state.scenes[scene.id],root).capture;
+    writeJson(path.join(dir,'capture-report.json'),{scene:scene.id,status:'PASS',
+      captureHash:fileHash(footage),captureInputHash:state.scenes[scene.id].artifacts.capture.inputHash,
+      pageErrors:[],assertions:[{id:'server-ok',type:'clickExpectResponse',pass:true},{id:'ui-ok',type:'assertText',pass:true}]});
+    const plan={schemaVersion:1,features:[{id:'save',includedInScenes:[scene.id]}]};
+    const planning=path.join(root,'.avp','planning');fs.mkdirSync(planning,{recursive:true});writeJson(path.join(planning,'feature-coverage.json'),plan);
+    const status=()=>inspectEvidence(root,config,state,{isCaptureStale:s=>staleParts(s,config,state.scenes[s.id],root).capture});
+    assert.equal(status().ready,true);
+    fs.writeFileSync(path.join(src,'main.ts'),'export const version = 2;');
+    assert.equal(status().ready,false);
+    assert.equal(status().scenes[0].status,'UNVERIFIED');
   }finally{fs.rmSync(root,{recursive:true,force:true});}
 });

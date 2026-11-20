@@ -141,7 +141,7 @@ export function verifySceneClaims(root,config,scene,state) {
   };
 }
 
-export function inspectEvidence(root,config,state) {
+export function inspectEvidence(root,config,state,{isCaptureStale}={}) {
   const coverage=verificationMode(config)==='claims'?(()=>{
     try{return {pass:true,...requireCoveragePlan(root,config)};}
     catch(e){return {pass:false,error:e.message};}
@@ -151,6 +151,10 @@ export function inspectEvidence(root,config,state) {
     if(!(scene.featureIds||[]).length)return {id:scene.id,status:'NOT_APPLICABLE'};
     try{
       const result=verifySceneClaims(root,config,scene,state);
+      // The core supplies its canonical staleParts check, including source
+      // fingerprints, app URL and viewport. Without it inspection fails closed.
+      if(typeof isCaptureStale!=='function'||isCaptureStale(scene))
+        throw Error('Source/runtime capture freshness not established');
       const artifact=state.scenes?.[scene.id]?.artifacts?.capture;
       const file=artifact?path.join(sceneDir(root,scene.id),artifact.file):null;
       if(!file||!fs.existsSync(file)||fileHash(file)!==artifact.hash)

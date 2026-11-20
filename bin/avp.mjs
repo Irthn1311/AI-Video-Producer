@@ -66,7 +66,7 @@ async function buildScene(root,config,state,scene,args){if(config.review.mode===
 async function main(){const args=parseArgs(process.argv.slice(2));const command=args._[0]||'help';if(['help','--help','-h'].includes(command)){usage();return;}if(command==='doctor'){process.exitCode=doctor();return;}if(command==='init'){init(args._[1]||args.project);return;}const {root,config}=getProject(args.project||'.');const state=loadState(root);
   switch(command){
     case 'inspect':console.log(JSON.stringify(inspect(root,config),null,2));break;
-    case 'evidence':console.log(JSON.stringify(inspectEvidence(root,config,state),null,2));break;
+    case 'evidence':console.log(JSON.stringify(inspectEvidence(root,config,state,{isCaptureStale:scene=>staleParts(scene,config,sceneState(state,scene.id),root).capture}),null,2));break;
     case 'route':{const task=args.task||args._[1];if(!task)throw Error('Use --task TASK. See docs/capability-router.md');const result=routeCapabilities({task,profile:args.profile||resolveProfile(config),risk:args.risk||'normal',complexity:args.complexity||'normal',available:hostCapabilities(args),paidConsent:args['allow-paid-api']===true,estimatedUsd:args['estimated-usd']===undefined?null:Number(args['estimated-usd']),maxEstimatedUsd:config.budget?.maxEstimatedUsd??null,alreadyReservedUsd:state.budget?.estimatedUsdReserved??0});console.log(JSON.stringify(result,null,2));if(result.status==='blocked')process.exitCode=2;break;}
 
     case 'plan':console.log(JSON.stringify(plan(root,config,{force:!!args.force}),null,2));break;

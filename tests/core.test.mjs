@@ -14,7 +14,7 @@ function fixture(){
   const config=structuredClone(template);
   // Deliberate legacy fixture: synthetic media carries no real browser evidence.
   config.verification={mode:'legacy'};
-  for(const scene of config.scenes)delete scene.claims;
+  for(const scene of config.scenes){delete scene.claims;delete scene.capture.evidencePolicy;}
   config.sourcePath='src';config.render={engine:'ffmpeg',width:640,height:360,fps:24,captionsBurned:false};
   fs.mkdirSync(path.join(root,'src'));fs.writeFileSync(path.join(root,'src','main.ts'),'export const n = 1;');
   writeJson(path.join(avpDir(root),'planning','feature-coverage.json'),{schemaVersion:1,features:[]});

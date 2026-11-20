@@ -9,7 +9,7 @@
 
 - `repo-intelligence` is a human/agent procedure; Graphify/Serena/Aider are *optional external* tools, not automatically installed or orchestrated.
 - `plan` generates schema-aligned drafts; an AI agent must inspect the product and author the screenplay, narration and verify feature coverage.
-- Browser recording requires installed Playwright/Chromium and a running demo application. Paid speech synthesis requires a provider key and explicit opt-in. Subtitle timing uses estimated sentence durations rather than forced alignment.
+- Browser recording requires installed Playwright/Chromium and a running demo application. Paid speech synthesis requires a provider key and explicit opt-in. Subtitle timing is now silence-aware for spoken scenes or human-anchored on request; **these are still not ASR/forced word-level alignment**, and visual/audio review remains required.
 - `--allow-paid-api` is required for paid TTS. The CLI enforces an estimated per-call and project reservation budget **before network requests**, but estimates cannot cap the provider's real invoice. Retry caps are policy guidance; there is no general job scheduler.
 - Scene history and automatic restore of old media versions are not implemented. Capture hashes include source content, app URL and viewport to detect changes inside the configured source scope; runtime/browser changes outside that scope still require explicit review. Scene locks protect the current approved artifacts.
 - Automatic agent self-healing and robust true-cost accounting are future milestones.
@@ -17,6 +17,10 @@
 ## Quality-first capability routing baseline
 
 The project includes a declarative capability registry and non-executing `avp route` preflight with Quality as the default policy. It labels required tools, deferred MCP/Graphify escalation, semantic review requirements and estimated paid API budget. It does not measure Coding Agent subscription quota or automatically enforce capability decisions inside the existing production commands.
+
+## Audio timing parity
+
+Audio-enabled scenes can use local FFmpeg silence analysis for estimated sentence anchors or manually reviewed sentence timings. SRT and JSON caption artifacts are protected by content hashes. Voice and capture are reused when timing changes; no additional model call is required. Continuous/noisy speech still needs manual review or an optional aligner.
 
 ## Evidence-backed claim gates
 

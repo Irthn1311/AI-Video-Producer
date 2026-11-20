@@ -18,3 +18,6 @@ Use the scene narration, selected language(s), `.avp/scenes/<scene-id>/captions.
 
 ## Outputs
 The reviewed SRT/JSON timing source, caption styling configuration, rendered example frames, QA note on whether timing was measured or estimated. A corrected caption track invalidates downstream preview QA/approval.
+
+## MathMate-style timing
+Use `docs/audio-captions.md` for silence-based sentence anchors and manually checked offsets. Remotion uses `captions.json`, FFmpeg uses `captions.srt`; both files are hash-bound to QA. Silence observations are **not** word-level forced alignment. Never silently claim that an estimated timestamp is transcribed/aligned. Rebuild affected caption/preview only, preserving voice/cache.

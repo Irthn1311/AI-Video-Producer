@@ -5,6 +5,10 @@ Read `README.md`, `docs/architecture.md`, and `.agents/skills/video-producer/SKI
 ## Primary objective
 Produce an honest demo of a user-supplied application from **verified** functionality, with reusable per-scene artifacts, narration, captions, QA, and a final video. Agent reasoning decides *what to show*; deterministic CLI and providers handle media tasks. The CLI is not an autonomous LLM.
 
+## Speech timing and low-quota captions
+
+When a scene uses voiceover, follow `docs/audio-captions.md`. Generate audio once, then derive sentence caption timing from local FFmpeg silence analysis or reviewed manual anchors. Do not label automatic silence-based timings as ASR-verified or word-level forced alignment. If a speech region count differs from sentence count, review and adjust anchors before signing off on a critical video. Changing captions **must not** invoke paid TTS again. Never change `captions.json` outside the AVP regeneration/review workflow because its hash is bound to the preview.
+
 ## Reusable MathMate-style scene editing
 When scene-specific editing is required, read `docs/scene-editing.md` and use declarative `scene.edit` instead of generating bespoke Remotion code. Import any authentic secondary footage via `avp asset add`, preview the **edited scene**, run QA and request approval **before** final concat. Do not adjust narration speed to fit a scene. Changing an edit or media asset invalidates only the dependent preview. For simple demos, keep the deterministic FFmpeg path.
 

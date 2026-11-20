@@ -39,6 +39,10 @@ Ghép và xuất MP4
 | **Rendering** | FFmpeg; tùy chọn backend Remotion |
 | **QA** | Kiểm tra kỹ thuật và lưu bằng chứng theo cảnh |
 
+## Phụ đề bám theo âm thanh thực tế
+
+Khi có voiceover, AVP đo các khoảng nói/nghỉ trong WAV bằng FFmpeg để **ước lượng mốc câu** hợp lý hơn so với chia đều theo độ dài chữ. Có thể dùng `captionTiming.anchors` để khai báo mốc đã nghe/duyệt thủ công như workflow MathMate. SRT và `captions.json` đều có hash ràng buộc với QA; thay phụ đề không cần gọi lại Gemini. Đây **không phải forced alignment cấp từ**. [Hướng dẫn](docs/audio-captions.md).
+
 ## Liên kết lời thoại với bằng chứng
 
 Các project mới khởi tạo và project ví dụ mặc định bật `verification.mode: "claims"` (project cũ vẫn giữ tương thích). Chế độ này để buộc mỗi tính năng được giới thiệu phải có một đoạn lời thoại đã khai báo, dẫn tới các assertion Playwright thật. Scene QA kiểm tra hash của capture và evidence hiện tại; `avp evidence` hiển thị phần nào đã/chưa xác minh. Đây là kiểm chứng theo điều kiện khai báo, **chưa phải đánh giá ngữ nghĩa tự động hoàn chỉnh**. Xem [Claim Evidence](docs/claim-evidence.md).

@@ -24,7 +24,8 @@
     "voice": "Charon",
     "model": "gemini-2.5-flash-preview-tts",
     "style": "Clear and friendly",
-    "maxApiCallsPerRun": 5
+    "maxApiCallsPerRun": 5,
+    "estimatedUsdPerCall": null
   },
   "render": {
     "engine": "ffmpeg",

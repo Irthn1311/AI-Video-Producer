@@ -1,13 +1,133 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {avpDir,readJson,writeJson,sha,fileHash,sceneDir} from './utils.mjs';
+import {sourceFingerprint} from './inspect.mjs';
+
 const stamp=()=>new Date().toISOString();
-export function loadState(root){const file=path.join(avpDir(root),'run-state.json');return fs.existsSync(file)?readJson(file):{schemaVersion:1,createdAt:stamp(),reviews:{},scenes:{},history:[]};}
+const planPath=(root,stage)=>path.join(avpDir(root),'planning',stage==='coverage'?'feature-coverage.json':'storyboard.json');
+function assertStoryboardMatchesConfig(root,config){
+  const file=planPath(root,'storyboard');
+  if(!fs.existsSync(file))throw Error('Storyboard missing; run avp plan');
+  const actual=readJson(file).scenes;
+  const expected=config.scenes.map(s=>({id:s.id,title:s.title,durationSec:s.durationSec,featureIds:s.featureIds||[],narration:s.narration,actions:s.capture.actions}));
+  if(sha(actual)!==sha(expected))throw Error('Storyboard does not match project.json. Update canonical project.json and rerun avp plan --force before approval.');
+}
+
+export function loadState(root){const file=path.join(avpDir(root),'run-state.json');return fs.existsSync(file)?readJson(file):{schemaVersion:1,createdAt:stamp(),reviews:{},scenes:{},budget:{ttsCalls:0,estimatedUsdReserved:0},history:[]};}
 export function saveState(root,state){state.updatedAt=stamp();writeJson(path.join(avpDir(root),'run-state.json'),state);}
 export function sceneState(state,id){return state.scenes[id]??(state.scenes[id]={artifacts:{},locked:false,approved:false});}
-export function inputHashes(scene,config){return {capture:sha({capture:scene.capture,duration:scene.durationSec}),voice:sha({narration:scene.narration,voice:config.voiceover,language:config.language?.narration}),captions:sha({narration:scene.narration,language:config.language?.subtitles}),preview:sha({duration:scene.durationSec,style:config.style||{}})};}
-export function staleParts(scene,config,ss,root){const now=inputHashes(scene,config);const check=(name)=>{let a=ss.artifacts?.[name];if(!a)return true;const f=path.join(sceneDir(root,scene.id),a.file);return a.inputHash!==now[name]||!fs.existsSync(f)||a.hash!==fileHash(f);};const capture=check('capture');const voice=config.voiceover?.enabled===false?false:check('voice');const captions=check('captions')||voice;const preview=check('preview')||capture||voice||captions;return {capture,voice,captions,preview};}
-export function recordArtifact(root,state,scene,name,file,inputHash){const ss=sceneState(state,scene.id);const rel=path.relative(sceneDir(root,scene.id),file);ss.artifacts[name]={file:rel,hash:fileHash(file),inputHash,builtAt:stamp()};ss.approved=false;if(name==='voice'&&ss.artifacts.captions)ss.artifacts.captions.inputHash='INVALIDATED';if(name==='capture'||name==='voice'||name==='captions'){if(ss.artifacts.preview)ss.artifacts.preview.inputHash='INVALIDATED';}saveState(root,state);}
+
+/** Capture uses a content fingerprint, not file names or file sizes. Inputs include browser settings and app origin. */
+export function inputHashes(scene,config,ss={},root){
+  const artifacts=ss.artifacts||{};
+  return {
+    capture:sha({schema:2,capture:scene.capture,duration:scene.durationSec,appUrl:config.appUrl,viewport:{width:config.render?.width||1920,height:config.render?.height||1080,fps:config.render?.fps||30},source:root?sourceFingerprint(root,config):null,provider:'playwright-v1'}),
+    voice:sha({schema:2,narration:scene.narration,voice:config.voiceover,language:config.language?.narration,modelOverride:process.env.GEMINI_TTS_MODEL||null}),
+    captions:sha({schema:2,narration:scene.narration,language:config.language?.subtitles,voiceEnabled:config.voiceover?.enabled!==false,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null}),
+    preview:sha({schema:2,render:config.render,duration:scene.durationSec,style:config.style||{},captureHash:artifacts.capture?.hash,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null,captionHash:artifacts.captions?.hash})
+  };
+}
+export function staleParts(scene,config,ss,root){
+  const expected=inputHashes(scene,config,ss,root);
+  const check=name=>{
+    const a=ss.artifacts?.[name];if(!a)return true;
+    const f=path.join(sceneDir(root,scene.id),a.file);
+    return a.inputHash!==expected[name]||!fs.existsSync(f)||a.hash!==fileHash(f);
+  };
+  const capture=check('capture');
+  const voice=config.voiceover?.enabled===false?false:check('voice');
+  const captions=check('captions')||voice;
+  const preview=check('preview')||capture||voice||captions;
+  return {capture,voice,captions,preview};
+}
+export function invalidateOutput(state){delete state.output;delete state.reviews.final;}
+export function recordArtifact(root,state,scene,name,file,inputHash){
+  const ss=sceneState(state,scene.id);
+  const rel=path.relative(sceneDir(root,scene.id),file);
+  ss.artifacts[name]={file:rel,hash:fileHash(file),inputHash,builtAt:stamp()};
+  ss.approved=false;delete ss.approvedPreviewHash;delete ss.approvedQaHash;
+  delete ss.qa;
+  if(name==='voice'&&ss.artifacts.captions)ss.artifacts.captions.inputHash='INVALIDATED';
+  if(['capture','voice','captions'].includes(name)&&ss.artifacts.preview)ss.artifacts.preview.inputHash='INVALIDATED';
+  invalidateOutput(state);
+  saveState(root,state);
+}
 export function requireUnlocked(state,id){if(sceneState(state,id).locked)throw Error(`Scene ${id} is LOCKED. Human must explicitly run 'avp unlock --scene ${id}' to replace.`);}
-export function approve(root,state,config,stage,id){if(stage==='scene'){if(!id)throw Error('Use --scene ID');const scene=config.scenes.find(s=>s.id===id);if(!scene)throw Error('Unknown scene');const parts=staleParts(scene,config,sceneState(state,id),root);if(Object.values(parts).some(Boolean))throw Error(`Scene ${id} missing or stale artifacts: ${Object.entries(parts).filter(([,v])=>v).map(([k])=>k).join(', ')}`);const ss=sceneState(state,id);ss.approved=true;ss.locked=true;ss.approvedAt=stamp();}else if(['coverage','storyboard','final'].includes(stage)){if(stage==='final'){const out=path.join(avpDir(root),'output','final.mp4');if(!fs.existsSync(out))throw Error('Render a video first');}state.reviews[stage]={approvedAt:stamp(),configHash:sha(config)};}else throw Error('stage must be coverage, storyboard, scene, or final');state.history.push({event:'approved',stage,scene:id||null,at:stamp()});saveState(root,state);}
-export function gate(state,config,stage){if(config.review.mode!=='review'||config.review?.[stage==='coverage'?'featureCoverage':stage]===false)return;if(!state.reviews[stage]?.approvedAt)throw Error(`Review checkpoint '${stage}' is not approved. Run avp approve --stage ${stage}`);if(state.reviews[stage].configHash!==sha(config))throw Error(`Review '${stage}' invalidated by project config changes; re-approve after review.`);}
+export function validateSceneQa(root,config,scene,state){
+  const ss=sceneState(state,scene.id),parts=staleParts(scene,config,ss,root);
+  if(Object.values(parts).some(Boolean))throw Error(`Scene ${scene.id} has stale or missing media: ${Object.entries(parts).filter(([,v])=>v).map(([k])=>k).join(', ')}`);
+  const p=path.join(sceneDir(root,scene.id),'qa-report.json');
+  if(!fs.existsSync(p)||!ss.qa)throw Error(`Scene ${scene.id} lacks current QA evidence. Run avp qa --scene ${scene.id}`);
+  const report=readJson(p),previewFile=path.join(sceneDir(root,scene.id),'preview.mp4');
+  if(!report.pass||!report.checks||!Object.values(report.checks).every(Boolean))throw Error(`Scene ${scene.id} QA failed`);
+  const expected=inputHashes(scene,config,ss,root).preview;
+  if(report.previewHash!==fileHash(previewFile)||report.previewInputHash!==expected||ss.qa.previewHash!==report.previewHash||ss.qa.previewInputHash!==expected||ss.qa.reportHash!==fileHash(p))throw Error(`Scene ${scene.id} QA is stale or does not match current preview. Rerun avp qa`);
+  return report;
+}
+export function sceneApprovalValid(root,config,scene,state){
+  const ss=sceneState(state,scene.id);
+  if(!ss.approved||!ss.locked)throw Error(`Scene ${scene.id} awaits review approval`);
+  validateSceneQa(root,config,scene,state);
+  if(ss.approvedPreviewHash!==ss.artifacts.preview.hash||ss.approvedQaHash!==ss.qa.reportHash)throw Error(`Scene ${scene.id} approval is stale`);
+  return true;
+}
+export function finalInputHash(config,state){
+  return sha({schema:2,configHash:sha(config),scenes:config.scenes.map(s=>({id:s.id,previewHash:sceneState(state,s.id).artifacts.preview?.hash,qaHash:sceneState(state,s.id).qa?.reportHash})),engine:config.render?.engine||'ffmpeg'});
+}
+export function validateFinalOutput(root,config,state){
+  const file=path.join(avpDir(root),'output','final.mp4'),qa=path.join(avpDir(root),'output','final-qa.json');
+  if(!fs.existsSync(file)||!fs.existsSync(qa)||!state.output)throw Error('Render and validate final video first');
+  const report=readJson(qa);
+  if(report.pass!==true||!Object.values(report.checks||{}).every(Boolean)||report.outputHash!==fileHash(file)||state.output.hash!==report.outputHash||state.output.qaHash!==fileHash(qa)||state.output.inputHash!==finalInputHash(config,state))throw Error('Final output or QA evidence is stale; render again');
+  for(const scene of config.scenes){validateSceneQa(root,config,scene,state);if(config.review?.mode==='review')sceneApprovalValid(root,config,scene,state);}
+  return report;
+}
+export function approve(root,state,config,stage,id){
+  if(stage==='scene'){
+    if(!id)throw Error('Use --scene ID');
+    const scene=config.scenes.find(s=>s.id===id);if(!scene)throw Error('Unknown scene');
+    gate(state,config,'coverage',root);gate(state,config,'storyboard',root);
+    validateSceneQa(root,config,scene,state);
+    const ss=sceneState(state,id);ss.approved=true;ss.locked=true;ss.approvedAt=stamp();ss.approvedPreviewHash=ss.artifacts.preview.hash;ss.approvedQaHash=ss.qa.reportHash;
+    invalidateOutput(state);
+  }else if(stage==='coverage'||stage==='storyboard'){
+    if(stage==='storyboard')gate(state,config,'coverage',root);
+    if(stage==='storyboard')assertStoryboardMatchesConfig(root,config);
+    const file=planPath(root,stage);if(!fs.existsSync(file))throw Error('Generate and review planning artifacts first');
+    state.reviews[stage]={approvedAt:stamp(),configHash:sha(config),artifactHash:fileHash(file)};
+    // A new planning decision invalidates the final render review even if the film still exists.
+    invalidateOutput(state);
+  }else if(stage==='final'){
+    gate(state,config,'coverage',root);gate(state,config,'storyboard',root);
+    const report=validateFinalOutput(root,config,state);
+    state.reviews.final={approvedAt:stamp(),outputHash:report.outputHash,qaHash:state.output.qaHash,inputHash:state.output.inputHash};
+  }else throw Error('stage must be coverage, storyboard, scene, or final');
+  state.history.push({event:'approved',stage,scene:id||null,at:stamp()});saveState(root,state);
+}
+export function gate(state,config,stage,root){
+  if(config.review?.mode!=='review'||config.review?.[stage==='coverage'?'featureCoverage':stage]===false)return;
+  const record=state.reviews[stage];if(!record?.approvedAt)throw Error(`Review checkpoint '${stage}' is not approved. Run avp approve --stage ${stage}`);
+  if(record.configHash!==sha(config))throw Error(`Review '${stage}' invalidated by project config changes; re-approve after review.`);
+  if(!root)throw Error('Review gate requires project root for artifact verification');
+  if(stage==='storyboard')assertStoryboardMatchesConfig(root,config);
+  const file=planPath(root,stage);
+  if(!fs.existsSync(file)||record.artifactHash!==fileHash(file))throw Error(`Review '${stage}' invalidated by planning artifact changes; re-approve after review.`);
+}
+
+/** Fail closed before any provider network request; counts reservations even when provider fails. */
+export function reservePaidCall(root,state,config,session,estimatedUsd){
+  const maxCalls=config.voiceover?.maxApiCallsPerRun;
+  const limit=config.budget?.maxEstimatedUsd;
+  if(!Number.isInteger(maxCalls)||maxCalls<1)throw Error('voiceover.maxApiCallsPerRun must be a positive integer');
+  if(!Number.isFinite(limit)||limit<=0)throw Error('budget.maxEstimatedUsd must be positive before paid API calls');
+  if(!Number.isFinite(estimatedUsd)||estimatedUsd<=0)throw Error('Set voiceover.estimatedUsdPerCall to a positive cost estimate (USD) before paid calls');
+  if(!session||!Number.isInteger(session.calls))throw Error('Paid API run session missing');
+  if(session.calls>=maxCalls)throw Error(`Paid API per-run call limit reached (${maxCalls})`);
+  const budget=state.budget??(state.budget={ttsCalls:0,estimatedUsdReserved:0});
+  if(budget.estimatedUsdReserved+estimatedUsd>limit+1e-9)throw Error(`Estimated paid API project budget exceeded (${limit} USD). No call made.`);
+  session.calls++;
+  budget.ttsCalls++;
+  budget.estimatedUsdReserved=Math.round((budget.estimatedUsdReserved+estimatedUsd)*1000000)/1000000;
+  state.history.push({event:'paid-api-reserved',provider:'gemini',estimatedUsd,at:stamp()});saveState(root,state);
+  return {callsThisRun:session.calls,projectEstimatedUsdReserved:budget.estimatedUsdReserved};
+}

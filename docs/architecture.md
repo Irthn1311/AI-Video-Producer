@@ -11,11 +11,13 @@
 
 `project.json` specifies stable scene IDs, title, sourcePath, appUrl, languages, voice, render engine, review mode, capture actions, narration and target durations. `.avp/planning/feature-coverage.json` and `storyboard.json` are drafts for agent/human confirmation. `.avp/run-state.json` tracks approvals, artifact hashes and locks. Each `.avp/scenes/<id>/` contains `capture.mp4`, optional `voice.wav`, `captions.srt`, `preview.mp4`, capture/voice/caption reports and `qa-report.json`. Final artifact: `.avp/output/final.mp4`, `final-qa.json`.
 
-## Invalidations
+## Dependency hashes and approvals
 
-Capture input hash = capture script plus scene duration. Voice input hash = narration plus provider config and speech language. Caption input hash = narration plus subtitle language. Preview input hash = style plus duration; **rebuilt capture/voice/captions explicitly invalidate preview**. Content checksum validates on-disk outputs. Approved scenes are locked until explicit `avp unlock`.
+Capture input hash includes **source file content fingerprints**, scene actions, scene duration, app origin and render viewport/fps. Voice input hash includes narration, language and provider settings. Caption input hash includes narration, subtitle language and voice artifact hash. Preview input hash includes rendering settings and its capture/voice/caption artifact hashes.
 
-**Known v0.1 limitation:** the CLI intentionally does not auto-detect edits to the *source application* or browser runtime. When its behavior changes, unlock affected scenes and use `--force` to re-capture. Final approval should be revalidated after a new render. The target app is NOT modified by AVP.
+Scene QA records the current preview checksum and preview input hash; a regenerated preview **invalidates previous QA and review approval**. Coverage/storyboard approval records the current project config hash and actual planning-file checksum. A storyboard must agree with the canonical `project.json` scene list before approval. Final QA and approval are bound to the current exported MP4 and per-scene QA hashes, including in autonomous mode.
+
+Changes to code **inside `sourcePath`** conservatively invalidate capture. External runtime changes (such as an API deployment or installed browser update) are not automatically fingerprinted; recapture explicitly if the behavior differs. Locks require explicit `avp unlock` before replacing an approved scene. Project budget reservations are local **estimated USD limits**, not provider-side billing caps.
 
 ## Review and recovery
 

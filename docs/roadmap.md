@@ -20,7 +20,7 @@ The project includes a declarative capability registry and non-executing `avp ro
 
 ## Evidence-backed claim gates
 
-The opt-in `verification.mode=claims` contract validates declared feature coverage, exact narration excerpts and explicit runtime assertion mappings. Scene QA binds matching assertions to current capture/report hashes; post-capture tampering invalidates approval. `avp evidence` reports verification readiness locally. This is **not** autonomous semantic review; agent-generated claims still need independent factual/editorial judgement.
+The `verification.mode=claims` contract (default for new project templates, opt-in for legacy configs) validates declared feature coverage, exact narration excerpts and explicit runtime assertion mappings. Scene QA binds matching assertions to current capture/report hashes; post-capture tampering invalidates approval. `avp evidence` reports verification readiness locally. This is **not** autonomous semantic review; agent-generated claims still need independent factual/editorial judgement.
 
 ## MathMate runtime evidence primitives
 

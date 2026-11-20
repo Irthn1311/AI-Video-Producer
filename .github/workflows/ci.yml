@@ -48,4 +48,4 @@ jobs:
       - name: Capture real browser actions, verify network/DOM evidence and run QA
         env:
           AVP_BROWSER_SMOKE: '1'
-        run: node --test tests/browser-evidence-smoke.test.mjs
+        run: node --test tests/browser-evidence-smoke.test.mjs tests/default-project-browser-smoke.test.mjs

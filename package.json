@@ -1,0 +1,25 @@
+{
+  "name": "ai-video-producer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent-first, scene-based, provider-extensible AI video production toolkit",
+  "engines": { "node": ">=22" },
+  "bin": { "avp": "./bin/avp.mjs" },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "demo": "node examples/sample-app/server.mjs",
+    "doctor": "node bin/avp.mjs doctor",
+    "help": "node bin/avp.mjs help"
+  },
+  "optionalDependencies": {
+    "@playwright/test": "1.64.1",
+    "@remotion/bundler": "4.0.541",
+    "@remotion/renderer": "4.0.541",
+    "@remotion/media": "4.0.541",
+    "@remotion/cli": "4.0.541",
+    "remotion": "4.0.541",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  }
+}

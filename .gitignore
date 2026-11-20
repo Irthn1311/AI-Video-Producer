@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+.avp/
+projects/
+.tmp/
+output/
+dist/
+graphify-out/
+__pycache__/
+.venv/

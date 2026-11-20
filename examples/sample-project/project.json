@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "title": "Sample Application Demo",
+  "module": "software-demo",
+  "sourcePath": "../sample-app",
+  "appUrl": "http://127.0.0.1:4173",
+  "language": {
+    "script": "en",
+    "narration": "en-US",
+    "subtitles": [
+      "en"
+    ]
+  },
+  "review": {
+    "mode": "review",
+    "featureCoverage": true,
+    "storyboard": true,
+    "eachScene": true,
+    "finalVideo": true
+  },
+  "voiceover": {
+    "enabled": false,
+    "provider": "gemini",
+    "voice": "Charon",
+    "model": "gemini-2.5-flash-preview-tts",
+    "style": "Clear and friendly",
+    "maxApiCallsPerRun": 5
+  },
+  "render": {
+    "engine": "ffmpeg",
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "captionsBurned": true
+  },
+  "budget": {
+    "maxRetryPerScene": 2,
+    "maxEstimatedUsd": 2
+  },
+  "scenes": [
+    {
+      "id": "scene-01-intro",
+      "title": "Dashboard overview",
+      "durationSec": 6,
+      "featureIds": [
+        "dashboard"
+      ],
+      "narration": "Welcome to our sample learning dashboard.",
+      "capture": {
+        "actions": [
+          {
+            "type": "goto",
+            "path": "/"
+          },
+          {
+            "type": "waitFor",
+            "role": "heading",
+            "name": "Learning Dashboard"
+          },
+          {
+            "type": "hover",
+            "testId": "overview-card"
+          },
+          {
+            "type": "pause",
+            "ms": 1800
+          }
+        ]
+      }
+    },
+    {
+      "id": "scene-02-feature",
+      "title": "Real interactive workflow",
+      "durationSec": 8,
+      "featureIds": [
+        "demo-action"
+      ],
+      "narration": "Select start demo and see an authentic result appear.",
+      "capture": {
+        "actions": [
+          {
+            "type": "goto",
+            "path": "/"
+          },
+          {
+            "type": "click",
+            "role": "button",
+            "name": "Start demo"
+          },
+          {
+            "type": "waitFor",
+            "testId": "result-card"
+          },
+          {
+            "type": "hover",
+            "testId": "result-card"
+          },
+          {
+            "type": "pause",
+            "ms": 2000
+          }
+        ]
+      }
+    }
+  ]
+}

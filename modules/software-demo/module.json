@@ -1,0 +1,10 @@
+{
+  "id": "software-demo",
+  "version": "0.1.0",
+  "description": "Real browser-based product walkthroughs with scene-level capture and evidence.",
+  "entrypointSkill": ".agents/skills/browser-capture/SKILL.md",
+  "stages": ["inspect", "coverage", "storyboard", "capture", "voice", "captions", "preview", "qa", "render"],
+  "captureProvider": "playwright",
+  "supportedActions": ["goto", "click", "fill", "hover", "waitFor", "pause", "scroll", "screenshot"],
+  "requires": ["node >=22", "ffmpeg", "ffprobe", "@playwright/test for browser capture"]
+}

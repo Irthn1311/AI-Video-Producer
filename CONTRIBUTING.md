@@ -1,0 +1,3 @@
+# Contributing
+
+Use Node.js 22+, `npm test`, and small focused changes. Preserve schemaVersion in state/config contracts or implement a migration. Keep the target app read-only. Add at least one unit test for changes in dependency invalidation and review gates; add an integration test when touching media pipeline. Treat all external inputs as untrusted. Never commit `.env`, credentials, captures with personal data, or media without redistribution rights. Provider adapters must fail closed for missing credentials and paid API opt-in. Documentation for new skills belongs under `.agents/skills/<name>/SKILL.md` with YAML front matter. Cross-platform changes should be tested rather than inferred.

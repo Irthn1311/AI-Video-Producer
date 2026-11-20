@@ -5,6 +5,7 @@ import {spawnSync} from 'node:child_process';
 import {profileNames} from './capabilities.mjs';
 import {validateSceneEdit} from './editing.mjs';
 import {validateCaptureEvidenceConfig} from './capture-assertions.mjs';
+import {validateClaimConfig} from './evidence.mjs';
 
 export const readJson=(file)=>JSON.parse(fs.readFileSync(file,'utf8'));
 export function writeJson(file,data){fs.mkdirSync(path.dirname(file),{recursive:true});const temp=`${file}.${process.pid}.tmp`;fs.writeFileSync(temp,JSON.stringify(data,null,2)+'\n');fs.renameSync(temp,file);}
@@ -20,7 +21,7 @@ export function assertConfig(p){if(p.schemaVersion!==1)throw Error('project.json
   if(p.voiceover?.enabled!==false&&p.voiceover?.provider!=='gemini')throw Error('v0.1 supports Gemini voice provider only');
   if(p.voiceover?.maxApiCallsPerRun!==undefined&&(!Number.isInteger(p.voiceover.maxApiCallsPerRun)||p.voiceover.maxApiCallsPerRun<1))throw Error('Invalid voiceover.maxApiCallsPerRun');
   if(p.voiceover?.estimatedUsdPerCall!=null&&(!Number.isFinite(p.voiceover.estimatedUsdPerCall)||p.voiceover.estimatedUsdPerCall<=0))throw Error('Invalid voiceover.estimatedUsdPerCall');
-  if(p.budget?.maxEstimatedUsd!=null&&(!Number.isFinite(p.budget.maxEstimatedUsd)||p.budget.maxEstimatedUsd<=0))throw Error('Invalid budget.maxEstimatedUsd');const ids=new Set();for(const s of p.scenes){safeName(s.id);if(ids.has(s.id))throw Error('Duplicate scene ID '+s.id);ids.add(s.id);if(typeof s.durationSec!=='number'||s.durationSec<1||s.durationSec>900)throw Error('Invalid duration for '+s.id);if(!Array.isArray(s.capture?.actions))throw Error('Capture actions required for '+s.id);if(typeof s.narration!=='string')throw Error('narration must be a string for '+s.id);validateSceneEdit(s);validateCaptureEvidenceConfig(s.capture);}return p;}
+  if(p.budget?.maxEstimatedUsd!=null&&(!Number.isFinite(p.budget.maxEstimatedUsd)||p.budget.maxEstimatedUsd<=0))throw Error('Invalid budget.maxEstimatedUsd');const ids=new Set();for(const s of p.scenes){safeName(s.id);if(ids.has(s.id))throw Error('Duplicate scene ID '+s.id);ids.add(s.id);if(typeof s.durationSec!=='number'||s.durationSec<1||s.durationSec>900)throw Error('Invalid duration for '+s.id);if(!Array.isArray(s.capture?.actions))throw Error('Capture actions required for '+s.id);if(typeof s.narration!=='string')throw Error('narration must be a string for '+s.id);validateSceneEdit(s);validateCaptureEvidenceConfig(s.capture);}validateClaimConfig(p);return p;}
 export function getProject(dir){const root=path.resolve(dir);const p=path.join(root,'project.json');if(!fs.existsSync(p))throw Error(`Project missing: ${p}. Run avp init`);return {root,config:assertConfig(readJson(p))};}
 export const avpDir=root=>path.join(root,'.avp');
 export const sceneDir=(root,id)=>path.join(avpDir(root),'scenes',safeName(id));

@@ -18,6 +18,10 @@
 
 The project includes a declarative capability registry and non-executing `avp route` preflight with Quality as the default policy. It labels required tools, deferred MCP/Graphify escalation, semantic review requirements and estimated paid API budget. It does not measure Coding Agent subscription quota or automatically enforce capability decisions inside the existing production commands.
 
+## Evidence-backed claim gates
+
+The opt-in `verification.mode=claims` contract validates declared feature coverage, exact narration excerpts and explicit runtime assertion mappings. Scene QA binds matching assertions to current capture/report hashes; post-capture tampering invalidates approval. `avp evidence` reports verification readiness locally. This is **not** autonomous semantic review; agent-generated claims still need independent factual/editorial judgement.
+
 ## MathMate runtime evidence primitives
 
 The capture engine supports opt-in DOM and network-response assertions, producing local `capture-report.json` artifacts tied by hash to scene QA. These checks do not require LLM calls and fail closed when enabled. **Claim-to-evidence binding and automated feature-coverage enforcement remain incomplete**.

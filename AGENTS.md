@@ -13,6 +13,9 @@ Quality is the default optimization profile, including for older project configu
 
 Quality does **not** waive human approvals, runtime verification, data privacy or paid API consent. Reuse hashed/approved artifacts, cap retries, and do not claim knowledge of a vendor's remaining subscription quota. If a required capability is missing, report the blocker; do not silently downgrade to unverified video.
 
+## Evidence-backed narration and feature coverage
+Before claiming a feature was verified, read `docs/claim-evidence.md`. In `verification.mode=claims`, the agent must declare `scene.claims` as exact narration excerpts, identify real `featureIds`, map each claim to explicit `evidenceId` values from the scene capture actions, and run `avp evidence` to identify unresolved assertions. Coverage approval is approval of the **candidate feature list**, not proof of a working feature. No claim may be marked verified merely because the agent wrote a passing JSON value. Actual runtime evidence is checked at capture and scene QA; independent semantic review is still required before publishing.
+
 ## Mandatory sequence
 1. `avp doctor`, then `avp init <project-dir>` if needed.
 2. Read project brief/config. Run `avp inspect --project <project-dir>`; use `repo-intelligence` tiered retrieval. Do not dump entire codebase into context. Inspect source as read-only, exclude secrets.

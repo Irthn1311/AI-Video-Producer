@@ -10,3 +10,6 @@ Use verified features, define stable scene IDs, target durations, accessible Pla
 ## Output contract
 
 Produce artifacts or evidence in the project `.avp/` directory where relevant; keep source paths and review decision explicit. Follow `docs/security.md` and do not introduce secrets into the repository.
+
+## Evidence-first storyboard
+When the project opts into `verification.mode=claims`, write `scene.claims` with exact excerpts of `scene.narration`, `featureId`, and declared capture `evidenceIds`. Run `avp plan --force` after modifying the canonical project config so the storyboard includes these claim mappings; avoid approving stale plans. Refer to `docs/claim-evidence.md`.

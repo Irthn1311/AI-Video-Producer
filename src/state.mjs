@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {editAssetNames} from './editing.mjs';
 import {captureEvidencePassed} from './capture-assertions.mjs';
+import {verificationMode,requireCoveragePlan,verifySceneClaims} from './evidence.mjs';
 import {avpDir,readJson,writeJson,sha,fileHash,sceneDir} from './utils.mjs';
 import {sourceFingerprint} from './inspect.mjs';
 
@@ -12,7 +13,7 @@ function assertStoryboardMatchesConfig(root,config){
   const file=planPath(root,'storyboard');
   if(!fs.existsSync(file))throw Error('Storyboard missing; run avp plan');
   const actual=readJson(file).scenes;
-  const expected=config.scenes.map(s=>({id:s.id,title:s.title,durationSec:s.durationSec,featureIds:s.featureIds||[],narration:s.narration,actions:s.capture.actions}));
+  const expected=config.scenes.map(s=>({id:s.id,title:s.title,durationSec:s.durationSec,featureIds:s.featureIds||[],narration:s.narration,actions:s.capture.actions,...(s.claims!==undefined?{claims:s.claims}:{})}));
   if(sha(actual)!==sha(expected))throw Error('Storyboard does not match project.json. Update canonical project.json and rerun avp plan --force before approval.');
 }
 
@@ -82,6 +83,11 @@ export function validateSceneQa(root,config,scene,state){
       ||!captureEvidencePassed(readJson(evidenceFile),scene.capture.evidencePolicy))
       throw Error(`Scene ${scene.id} capture evidence is missing, invalid or stale`);
   }
+  if(verificationMode(config)==='claims'&&(scene.featureIds||[]).length){
+    const fresh=verifySceneClaims(root,config,scene,state);
+    if(!report.claimEvidence||sha(report.claimEvidence)!==sha(fresh))
+      throw Error(`Scene ${scene.id} claim-to-evidence QA is missing, invalid or stale`);
+  }
   const expected=inputHashes(scene,config,ss,root).preview;
   if(report.previewHash!==fileHash(previewFile)||report.previewInputHash!==expected||ss.qa.previewHash!==report.previewHash||ss.qa.previewInputHash!==expected||ss.qa.reportHash!==fileHash(p))throw Error(`Scene ${scene.id} QA is stale or does not match current preview. Rerun avp qa`);
   return report;
@@ -101,6 +107,7 @@ export function validateFinalOutput(root,config,state){
   if(!fs.existsSync(file)||!fs.existsSync(qa)||!state.output)throw Error('Render and validate final video first');
   const report=readJson(qa);
   if(report.pass!==true||!Object.values(report.checks||{}).every(Boolean)||report.outputHash!==fileHash(file)||state.output.hash!==report.outputHash||state.output.qaHash!==fileHash(qa)||state.output.inputHash!==finalInputHash(config,state))throw Error('Final output or QA evidence is stale; render again');
+  requireCoveragePlan(root,config);
   for(const scene of config.scenes){validateSceneQa(root,config,scene,state);if(config.review?.mode==='review')sceneApprovalValid(root,config,scene,state);}
   return report;
 }
@@ -115,6 +122,7 @@ export function approve(root,state,config,stage,id){
   }else if(stage==='coverage'||stage==='storyboard'){
     if(stage==='storyboard')gate(state,config,'coverage',root);
     if(stage==='storyboard')assertStoryboardMatchesConfig(root,config);
+    if(stage==='coverage')requireCoveragePlan(root,config);
     const file=planPath(root,stage);if(!fs.existsSync(file))throw Error('Generate and review planning artifacts first');
     state.reviews[stage]={approvedAt:stamp(),configHash:sha(config),artifactHash:fileHash(file)};
     // A new planning decision invalidates the final render review even if the film still exists.
@@ -132,6 +140,7 @@ export function gate(state,config,stage,root){
   if(record.configHash!==sha(config))throw Error(`Review '${stage}' invalidated by project config changes; re-approve after review.`);
   if(!root)throw Error('Review gate requires project root for artifact verification');
   if(stage==='storyboard')assertStoryboardMatchesConfig(root,config);
+  if(stage==='coverage')requireCoveragePlan(root,config);
   const file=planPath(root,stage);
   if(!fs.existsSync(file)||record.artifactHash!==fileHash(file))throw Error(`Review '${stage}' invalidated by planning artifact changes; re-approve after review.`);
 }

@@ -1,5 +1,9 @@
 # Architecture: agent-first, local-first and scene-first
 
+## Claims, candidate coverage and binding to current runtime proof
+
+`src/evidence.mjs` implements an opt-in `verification.mode=claims` contract: a narration excerpt references a declared feature and the exact Playwright assertion IDs that must pass for its scene. The pre-capture `feature-coverage.json` remains a **candidate planning artifact**, not a false verified-state claim. Per-scene QA verifies current capture/report hashes and matching assertion IDs/types; final rendering checks complete scene coverage. Use `avp evidence` for local inspection and read [Claim Evidence](claim-evidence.md). This is evidence integrity and declarative linkage, not an LLM semantic correctness guarantee.
+
 ## Capture evidence and opt-in semantic safeguards
 
 `src/capture-assertions.mjs` adds local Playwright assertion actions for DOM and same-origin HTTP responses. When an individual scene enables `capture.evidencePolicy.requireAssertions`, technical scene QA requires a PASS capture report and binds the report hash to scene approval. This is runtime proof of the specified assertions, not a general proof of truthful narration. See [Capture Evidence](capture-evidence.md).

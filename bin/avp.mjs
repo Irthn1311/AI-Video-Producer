@@ -9,6 +9,7 @@ import {parseArgs,getProject,writeJson,readJson,avpDir,available,sha,sceneDir,sa
 import {loadState,saveState,sceneState,approve,gate,requireUnlocked,staleParts,invalidateOutput} from '../src/state.mjs';
 import {inspect} from '../src/inspect.mjs';
 import {capture,voice,captions,preview,qaScene,render,probe} from '../src/media.mjs';
+import {snapshotScene,restoreSceneSnapshot,listSceneSnapshots} from '../src/revisions.mjs';
 const apiSession={calls:0};
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 function usage(){console.log(`AI Video Producer v0.1 (local-first, software-demo)
@@ -23,10 +24,13 @@ Usage: avp <command> [--project DIR] [--scene ID] [options]
   evidence                   Inspect coverage + claim evidence status (local-only)
   approve --stage STAGE      Approve coverage | storyboard | scene | final
   unlock --scene ID          Unlock an approved scene for deliberate changes
+  snapshot --scene ID [--label NOTE]   Save local scene media revision (no approval change)
+  versions --scene ID        List scene snapshots without reading footage into context
+  restore --scene ID --version v0001 --confirm   Restore snapshot (requires unlock, invalidates QA/review)
   capture --scene ID         Playwright real UI recording
   attach --scene ID --file VIDEO   Import authentic footage captured separately
   voice --scene ID --allow-paid-api    Gemini TTS with enforced configured estimated budget
-  captions --scene ID        Estimate SRT timestamps (review required)
+  captions --scene ID        Silence-aware audio sentence timing or manual anchors (review required)
   asset add --scene ID --name NAME --file VIDEO  Import an authentic scene inset/shot source
   preview --scene ID         Render scene with FFmpeg or scene.edit Remotion
   qa --scene ID              Probe scene media (technical QA)
@@ -72,6 +76,14 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
     case 'plan':console.log(JSON.stringify(plan(root,config,{force:!!args.force}),null,2));break;
     case 'approve':{const stage=args.stage;if(!stage)throw Error('Use --stage coverage|storyboard|scene|final');if(stage==='coverage'||stage==='storyboard'){const file=path.join(avpDir(root),'planning',stage==='coverage'?'feature-coverage.json':'storyboard.json');if(!fs.existsSync(file))throw Error('Generate and review plans first: avp plan');}if(stage==='scene'){const sc=chooseScene(config,args);const q=path.join(sceneDir(root,sc.id),'qa-report.json');if(!fs.existsSync(q)||!readJson(q).pass)throw Error('Run avp qa and review a passing preview before approval');}approve(root,state,config,stage,args.scene);console.log(`Approved ${stage}${args.scene?' '+args.scene:''}`);break;}
     case 'unlock':{const s=chooseScene(config,args),ss=sceneState(state,s.id);if(!ss.locked)throw Error('Scene is not locked');ss.locked=false;ss.approved=false;invalidateOutput(state);state.history.push({event:'unlocked',scene:s.id,at:new Date().toISOString()});saveState(root,state);console.log(`Unlocked ${s.id}`);break;}
+    case 'snapshot':{const s=chooseScene(config,args);
+      console.log(JSON.stringify(snapshotScene(root,config,s,state,{label:args.label===undefined?null:args.label}),null,2));break;}
+    case 'versions':{const s=chooseScene(config,args);
+      console.log(JSON.stringify({scene:s.id,versions:listSceneSnapshots(root,s)},null,2));break;}
+    case 'restore':{const s=chooseScene(config,args);
+      if(args.confirm!==true)throw Error('Restoring scene media is destructive: unlock the scene, then pass --confirm --version v0001');
+      if(typeof args.version!=='string')throw Error('Specify --version v0001');
+      console.log(JSON.stringify(restoreSceneSnapshot(root,config,s,state,args.version),null,2));break;}
     case 'capture':{const s=chooseScene(config,args);gate(state,config,'coverage',root);gate(state,config,'storyboard',root);console.log(JSON.stringify(await capture(root,config,s,state,{force:!!args.force}),null,2));break;}
     case 'attach':{const s=chooseScene(config,args);if(!args.file)throw Error('Specify --file path/to/authentic-video.mp4');requireUnlocked(state,s.id);const file=path.resolve(args.file);if(!fs.existsSync(file))throw Error('File not found');const p=probe(file);if(!p.streams.some(x=>x.codec_type==='video'))throw Error('Not a video');const dir=sceneDir(root,s.id);fs.mkdirSync(dir,{recursive:true});const output=path.join(dir,'capture.mp4');const temp=path.join(dir,'capture.attach.mp4');const {run}=await import('../src/utils.mjs');run('ffmpeg',['-y','-v','error','-i',file,'-vf',`fps=${config.render.fps},scale=${config.render.width}:${config.render.height}:force_original_aspect_ratio=decrease,pad=${config.render.width}:${config.render.height}:(ow-iw)/2:(oh-ih)/2`,'-an','-c:v','libx264','-pix_fmt','yuv420p',temp]);fs.renameSync(temp,output);const {inputHashes,recordArtifact}=await import('../src/state.mjs');recordArtifact(root,state,s,'capture',output,inputHashes(s,config,sceneState(state,s.id),root).capture);console.log(`Attached authentic recorded footage for ${s.id}`);break;}
     case 'asset':{

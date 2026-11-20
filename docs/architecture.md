@@ -1,5 +1,9 @@
 # Architecture: agent-first, local-first and scene-first
 
+## Revision snapshots and safe rollback
+
+`src/revisions.mjs` provides local SHA-256 manifests, snapshot/list/restore for a scene's media and evidence, plus a pre-restore backup. Restore invalidates QA/approval and the final render state, and preserves original artifact input fingerprints so the existing cache rules can reject stale media after config/source changes. Snapshots are explicit and local; no automatic snapshot retention/pruning/cloud sync exists yet. Read [Scene Versions](scene-versions.md).
+
 ## Audio-aware sentence captions and metadata integrity
 
 `src/audio-timing.mjs` detects silence via FFmpeg and offers human-provided sentence anchor timing. `src/media.mjs` generates caption SRT and canonical JSON with provenance, actual measured speech spans and review warnings. `src/state.mjs` hashes **both** SRT and captions JSON, so changing a Remotion caption timestamp invalidates QA/approval. This does not require external AI calls and is not forced alignment. See [Speech-Aware Captions](audio-captions.md).

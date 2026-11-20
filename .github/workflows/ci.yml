@@ -1,14 +1,22 @@
-name: Node unit tests
+name: CI
+
 on:
   push:
   pull_request:
+
 jobs:
-  unit:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test tests/*.test.mjs
-      - run: node bin/avp.mjs doctor
+      - name: Install media tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Run unit and media smoke tests
+        run: npm test
+      - name: Check environment
+        run: node bin/avp.mjs doctor

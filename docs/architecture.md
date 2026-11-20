@@ -1,5 +1,9 @@
 # Architecture: agent-first, local-first and scene-first
 
+## Audio-aware sentence captions and metadata integrity
+
+`src/audio-timing.mjs` detects silence via FFmpeg and offers human-provided sentence anchor timing. `src/media.mjs` generates caption SRT and canonical JSON with provenance, actual measured speech spans and review warnings. `src/state.mjs` hashes **both** SRT and captions JSON, so changing a Remotion caption timestamp invalidates QA/approval. This does not require external AI calls and is not forced alignment. See [Speech-Aware Captions](audio-captions.md).
+
 ## Claims, candidate coverage and binding to current runtime proof
 
 `src/evidence.mjs` implements an opt-in `verification.mode=claims` contract: a narration excerpt references a declared feature and the exact Playwright assertion IDs that must pass for its scene. The pre-capture `feature-coverage.json` remains a **candidate planning artifact**, not a false verified-state claim. Per-scene QA verifies current capture/report hashes and matching assertion IDs/types; final rendering checks complete scene coverage. Use `avp evidence` for local inspection and read [Claim Evidence](claim-evidence.md). This is evidence integrity and declarative linkage, not an LLM semantic correctness guarantee.

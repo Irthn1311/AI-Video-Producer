@@ -55,6 +55,10 @@ flowchart LR
 
 The first module is **`software-demo`**. The architecture leaves room for future explainer and marketing-video modules. AVP v0.1 is an extensible toolkit, **not a hosted or fully autonomous video service**.
 
+## Speech-aware captions
+
+When voiceover is enabled, AVP uses local FFmpeg silence analysis to propose sentence caption timings instead of blindly distributing text over the whole clip. Optional reviewed `captionTiming.anchors` reproduce the MathMate-style human-audited method. JSON and SRT timings are both hashed for QA/review integrity; no extra AI call is made. **These are silence-aware estimates, not true forced alignment.** [Details](docs/audio-captions.md).
+
 ## Evidence-backed feature claims
 
 New projects and the sample use strict `verification.mode: "claims"` by default (legacy projects remain unchanged). This workflow binds each narrated feature claim to explicit Playwright assertion IDs, validates the feature-coverage candidate plan, and requires the current capture report/footage hashes to agree during scene QA and rendering. Inspect local status with `avp evidence`. This does **not** replace independent semantic/editorial review. Read [Claim Evidence](docs/claim-evidence.md).

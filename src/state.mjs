@@ -40,8 +40,8 @@ export function inputHashes(scene,config,ss={},root){
   return {
     capture:sha({schema:2,capture:scene.capture,duration:scene.durationSec,appUrl:config.appUrl,viewport:{width:config.render?.width||1920,height:config.render?.height||1080,fps:config.render?.fps||30},source:root?sourceFingerprint(root,config):null,provider:'playwright-v1'}),
     voice:sha({schema:2,narration:scene.narration,voice:config.voiceover,language:config.language?.narration,modelOverride:process.env.GEMINI_TTS_MODEL||null}),
-    captions:sha({schema:2,narration:scene.narration,language:config.language?.subtitles,voiceEnabled:config.voiceover?.enabled!==false,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null}),
-    preview:sha({schema:2,render:config.render,duration:scene.durationSec,style:config.style||{},edit:scene.edit,editAssets:editAssetsFingerprint(scene,root),captureHash:artifacts.capture?.hash,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null,captionHash:artifacts.captions?.hash})
+    captions:sha({schema:3,narration:scene.narration,timing:scene.captionTiming??null,language:config.language?.subtitles,voiceEnabled:config.voiceover?.enabled!==false,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null}),
+    preview:sha({schema:2,render:config.render,duration:scene.durationSec,style:config.style||{},edit:scene.edit,editAssets:editAssetsFingerprint(scene,root),captureHash:artifacts.capture?.hash,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null,captionHash:artifacts.captions?.hash,captionMetadataHash:artifacts.captions?.metadataHash})
   };
 }
 export function staleParts(scene,config,ss,root){
@@ -49,7 +49,15 @@ export function staleParts(scene,config,ss,root){
   const check=name=>{
     const a=ss.artifacts?.[name];if(!a)return true;
     const f=path.join(sceneDir(root,scene.id),a.file);
-    return a.inputHash!==expected[name]||!fs.existsSync(f)||a.hash!==fileHash(f);
+    if(a.inputHash!==expected[name]||!fs.existsSync(f)||a.hash!==fileHash(f))return true;
+    if(name==='captions'){
+      const meta=path.join(sceneDir(root,scene.id),'captions.json');
+      // Old legacy fixtures may have SRT only. A real captions.json must always be
+      // hashed; otherwise Remotion could use edited timings not seen during QA.
+      if(fs.existsSync(meta))return !a.metadataHash||fileHash(meta)!==a.metadataHash;
+      return Boolean(a.metadataHash);
+    }
+    return false;
   };
   const capture=check('capture');
   const voice=config.voiceover?.enabled===false?false:check('voice');

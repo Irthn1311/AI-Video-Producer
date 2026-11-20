@@ -5,6 +5,7 @@ import {run,readJson,writeJson,sceneDir,avpDir,loadEnv,sha,atomicWrite,fileHash}
 import {recordArtifact,inputHashes,sceneState,saveState,requireUnlocked,staleParts,gate,validateSceneQa,sceneApprovalValid,finalInputHash, invalidateOutput,reservePaidCall} from './state.mjs';
 import {executeCaptureAssertion,captureEvidencePassed} from './capture-assertions.mjs';
 import {verificationMode,verifySceneClaims,requireCoveragePlan} from './evidence.mjs';
+import {sentenceParts,measureSpeech,alignNarration,validateCaptionRows} from './audio-timing.mjs';
 const seconds=(value)=>Number(value||0);
 export function probe(file){return JSON.parse(run('ffprobe',['-v','error','-show_format','-show_streams','-of','json',file]));}
 export function mediaSeconds(file){return seconds(probe(file).format?.duration);}
@@ -75,13 +76,37 @@ export async function voice(root,config,scene,state,opts={}){
   writeJson(path.join(dir,'voice-report.json'),{provider:'gemini',model,voice:v,language:lang,durationSec:mediaSeconds(out),contentHash:sha(scene.narration),generatedAt:new Date().toISOString(),humanListeningApproved:false});
   return {file:out,durationSec:mediaSeconds(out),budgetReservation};
 }
-const stamp=t=>{let ms=Math.round(t*1000);const h=Math.floor(ms/3600000);ms%=3600000;const m=Math.floor(ms/60000);ms%=60000;const s=Math.floor(ms/1000);return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(ms%1000).padStart(3,'0')}`;};
-function splitSentences(text){return text.match(/[^.!?\n]+(?:[.!?]+|$)/gu)?.map(x=>x.trim()).filter(Boolean)||[];}
+const stamp=t=>{let ms=Math.round(t*1000);const h=Math.floor(ms/3600000);ms%=3600000;const m=Math.floor(ms/60000);ms%=60000;const s=Math.floor(ms/1000);return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+','+String(ms%1000).padStart(3,'0');};
 export function captions(root,config,scene,state,opts={}){
-  requireUnlocked(state,scene.id);const ss=sceneState(state,scene.id);const h=inputHashes(scene,config,sceneState(state,scene.id),root);if(!staleParts(scene,config,ss,root).captions&&!opts.force)return {reused:true};
-  const dir=sceneDir(root,scene.id);fs.mkdirSync(dir,{recursive:true});const audio=path.join(dir,'voice.wav');const duration=fs.existsSync(audio)&&config.voiceover?.enabled!==false?mediaSeconds(audio):scene.durationSec;
-  const sentences=splitSentences(scene.narration);const weight=sentences.reduce((a,s)=>a+s.length,0)||1;let cursor=0;const rows=sentences.map(s=>{let start=cursor;cursor+=duration*s.length/weight;return {startMs:Math.round(start*1000),endMs:Math.round(cursor*1000),text:s};});
-  const srt=rows.map((r,i)=>`${i+1}\n${stamp(r.startMs/1000)} --> ${stamp(r.endMs/1000)}\n${r.text}\n`).join('\n');const out=path.join(dir,'captions.srt');atomicWrite(out,srt);writeJson(path.join(dir,'captions.json'),{timingMethod:'ESTIMATED proportional text length (not forced alignment)',language:config.language?.subtitles?.[0]||config.language?.narration,rows});recordArtifact(root,state,scene,'captions',out,h.captions);return {file:out,count:rows.length,estimated:true};
+  requireUnlocked(state,scene.id);
+  const ss=sceneState(state,scene.id),parts=staleParts(scene,config,ss,root);
+  if(!parts.captions&&!opts.force)return {reused:true};
+  const haveVoice=config.voiceover?.enabled!==false;
+  if(haveVoice&&parts.voice)throw Error('Current voice is missing/stale; generate or attach approved voice before captions');
+  const dir=sceneDir(root,scene.id);fs.mkdirSync(dir,{recursive:true});
+  const voiceFile=path.join(dir,'voice.wav'),duration=haveVoice?mediaSeconds(voiceFile):scene.durationSec;
+  const requested=scene.captionTiming?.mode||(haveVoice?'audio-pauses':'proportional');
+  const analysis=haveVoice&&sentenceParts(scene.narration).length?measureSpeech(voiceFile,duration):null;
+  const aligned=alignNarration(scene.narration,duration,{
+    mode:requested,maxChars:scene.captionTiming?.maxChars||80,
+    anchors:scene.captionTiming?.anchors,measured:analysis
+  });
+  const srt=aligned.rows.map((row,i)=>
+    String(i+1)+'\n'+stamp(row.startMs/1000)+' --> '+stamp(row.endMs/1000)+'\n'+row.text+'\n').join('\n');
+  const out=path.join(dir,'captions.srt'),metadata=path.join(dir,'captions.json');
+  atomicWrite(out,srt);
+  writeJson(metadata,{
+    schemaVersion:2,timingMethod:aligned.timingMethod,
+    timingIsForcedAlignment:false,reviewRequired:aligned.reviewRequired,
+    language:config.language?.subtitles?.[0]||config.language?.narration,
+    audioDurationSec:haveVoice?duration:null,
+    voiceHash:haveVoice?fileHash(voiceFile):null,
+    analysis:aligned.analysis,rows:aligned.rows
+  });
+  recordArtifact(root,state,scene,'captions',out,inputHashes(scene,config,sceneState(state,scene.id),root).captions);
+  sceneState(state,scene.id).artifacts.captions.metadataHash=fileHash(metadata);
+  saveState(root,state);
+  return {file:out,count:aligned.rows.length,timingMethod:aligned.timingMethod,reviewRequired:aligned.reviewRequired,estimated:true};
 }
 export async function preview(root,config,scene,state,opts={}){
   requireUnlocked(state,scene.id);const ss=sceneState(state,scene.id),parts=staleParts(scene,config,ss,root);if(!parts.preview&&!opts.force)return {reused:true};
@@ -110,7 +135,19 @@ export function qaScene(root,config,scene,state){
   const p=probe(file),v=p.streams.find(x=>x.codec_type==='video'),a=p.streams.find(x=>x.codec_type==='audio');
   const target=Math.max(scene.durationSec,config.voiceover?.enabled!==false&&fs.existsSync(path.join(dir,'voice.wav'))?mediaSeconds(path.join(dir,'voice.wav'))+.5:0);
   const decode=run('ffmpeg',['-v','error','-i',file,'-f','null','-']);
-  const checks={videoH264:v?.codec_name==='h264',width:v?.width===(config.render?.width||1920),height:v?.height===(config.render?.height||1080),audioAAC:a?.codec_name==='aac',duration:Math.abs(mediaSeconds(file)-target)<.3,captionsExist:fs.existsSync(path.join(dir,'captions.srt')),fullDecode:decode!==null};
+  const captionFile=path.join(dir,'captions.json');
+  const captionInfo=fs.existsSync(captionFile)?readJson(captionFile):null;
+  let captionsValid=false;
+  try{
+    const maxChars=scene.captionTiming?.maxChars||80;
+    const bounded=config.voiceover?.enabled!==false&&fs.existsSync(path.join(dir,'voice.wav'))
+      ?mediaSeconds(path.join(dir,'voice.wav')):scene.durationSec;
+    captionsValid=Boolean(captionInfo)&&validateCaptionRows(captionInfo.rows,bounded,maxChars)
+      &&(captionInfo.rows?.length>0||!scene.narration.trim());
+    if(captionsValid&&config.voiceover?.enabled!==false)
+      captionsValid=captionInfo.voiceHash===fileHash(path.join(dir,'voice.wav'));
+  }catch{captionsValid=false;}
+  const checks={captionTimeline:captionsValid,videoH264:v?.codec_name==='h264',width:v?.width===(config.render?.width||1920),height:v?.height===(config.render?.height||1080),audioAAC:a?.codec_name==='aac',duration:Math.abs(mediaSeconds(file)-target)<.3,captionsExist:fs.existsSync(path.join(dir,'captions.srt')),fullDecode:decode!==null};
   const evidenceRequired=scene.capture.evidencePolicy?.requireAssertions===true;
   const captureReportFile=path.join(dir,'capture-report.json');
   const captureReport=evidenceRequired&&fs.existsSync(captureReportFile)?readJson(captureReportFile):null;
@@ -120,7 +157,7 @@ export function qaScene(root,config,scene,state){
     try{claimEvidence=verifySceneClaims(root,config,scene,state);checks.claimEvidence=claimEvidence.pass===true;}
     catch(e){checks.claimEvidence=false;claimEvidenceError=e.message;}
   }
-  const report={scene:scene.id,checks,...(claimEvidence?{claimEvidence}:{}),...(claimEvidenceError?{claimEvidenceError}:{}),pass:Object.values(checks).every(Boolean),durationSec:mediaSeconds(file),captionTiming:'Estimated unless externally aligned',visualReviewByHuman:false,previewHash:fileHash(file),previewInputHash:inputHashes(scene,config,ss,root).preview,...(evidenceRequired?{captureReportHash:captureReport?fileHash(captureReportFile):null}: {})};
+  const report={scene:scene.id,checks,...(claimEvidence?{claimEvidence}:{}),...(claimEvidenceError?{claimEvidenceError}:{}),pass:Object.values(checks).every(Boolean),durationSec:mediaSeconds(file),captionTiming:captionInfo?.timingMethod||'MISSING',captionReviewRequired:captionInfo?.reviewRequired??true,visualReviewByHuman:false,previewHash:fileHash(file),previewInputHash:inputHashes(scene,config,ss,root).preview,...(evidenceRequired?{captureReportHash:captureReport?fileHash(captureReportFile):null}: {})};
   const reportFile=path.join(dir,'qa-report.json');writeJson(reportFile,report);ss.qa={reportHash:fileHash(reportFile),previewHash:report.previewHash,previewInputHash:report.previewInputHash};ss.approved=false;
   invalidateOutput(state);saveState(root,state);return report;
 }

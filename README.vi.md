@@ -39,6 +39,14 @@ Ghép và xuất MP4
 | **Rendering** | FFmpeg; tùy chọn backend Remotion |
 | **QA** | Kiểm tra kỹ thuật và lưu bằng chứng theo cảnh |
 
+## Capability Router — mặc định Quality
+
+AVP mặc định dùng profile **Quality**: ưu tiên bằng chứng runtime, kiểm tra ngữ nghĩa độc lập khi rủi ro cao và các điểm duyệt quan trọng. [Capability Router](docs/capability-router.md) hiện tạo **kế hoạch sử dụng công cụ**, chưa tự kết nối MCP hay tiêu thụ quota. Nó ưu tiên công cụ cục bộ và artifact đã được xác minh trước khi cần tới model hoặc dịch vụ trả phí.
+
+```bash
+node bin/avp.mjs route --project examples/sample-project --task feature-verification --risk high
+```
+
 ## Agent Skills đã tích hợp sẵn
 
 Repo chứa **10 skill sản xuất video, 7 skill hướng dẫn Remotion do AVP tự viết và bộ Graphify Agent Skill đầy đủ kèm tài liệu tham chiếu** tại [`.agents/skills/`](.agents/skills/). Khi clone repo, Codex/Claude Code/Gemini có thể đọc trực tiếp các hướng dẫn này, không cần đi tải từng skill để có tài liệu cơ bản.

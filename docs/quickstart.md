@@ -8,6 +8,17 @@
 6. `node bin/avp.mjs run --project examples/sample-project` records the first scene, generates captions, makes preview and QA; review mode stops. Watch `.avp/scenes/scene-01-intro/preview.mp4` and approve via `--stage scene --scene scene-01-intro`. Repeat `run` and scene approval for subsequent scenes.
 7. `node bin/avp.mjs render --project examples/sample-project` exports `.avp/output/final.mp4`. Review final, then `avp approve --stage final` (publishing is your responsibility).
 
+## Quality capability preflight
+
+New projects default to `optimization.profile=quality`, while older project configs also resolve to Quality. Inspect the local capability plan:
+
+```bash
+node bin/avp.mjs route --project examples/sample-project --task repo-research
+node bin/avp.mjs route --project examples/sample-project --task feature-verification --risk high
+```
+
+A blocked plan indicates a missing required capability; `review-required` indicates outstanding human review. Both are **planning states**, never proof of passing QA. See [Capability Router](capability-router.md).
+
 ## Using your own app
 
 `node bin/avp.mjs init /your/output/project`, then edit `/your/output/project/project.json`: `sourcePath` is relative to the project directory, `appUrl` must reference **your disposable local demo application**, and `scenes[]` needs valid Playwright actions. To let an agent write the storyboard, hand it `docs/agent-prompt.md` and have it follow `AGENTS.md` and relevant skills. Prefer stable `testId` or accessible `role` locators. Production app is read-only by policy and tests should use fake accounts.

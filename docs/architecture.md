@@ -1,5 +1,9 @@
 # Architecture: agent-first, local-first and scene-first
 
+## Quality-first capability preflight
+
+`src/capabilities.mjs` and `config/capabilities.json` provide a deterministic capability planner for Quality (default), Balanced and Economy. It reports stage requirements, available candidates, semantic review checkpoints and paid-API preflight; no external tools, models, MCP connections or quota queries are executed by the router. This planner is not yet wired as a hard gate into the capture/render workflow. See [Capability Router](capability-router.md).
+
 ## Control plane vs execution plane
 
 - **Agent control plane:** A coding agent (Codex, Claude Code, Gemini CLI, other) reads `AGENTS.md` and loads `.agents/skills/*/SKILL.md` selectively. It verifies product behavior, proposes feature coverage, composes a storyboard, interprets QA results, seeks approvals and invokes CLI actions. These are instructions, not hidden automatic LLM calls.

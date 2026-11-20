@@ -5,6 +5,11 @@ Read `README.md`, `docs/architecture.md`, and `.agents/skills/video-producer/SKI
 ## Primary objective
 Produce an honest demo of a user-supplied application from **verified** functionality, with reusable per-scene artifacts, narration, captions, QA, and a final video. Agent reasoning decides *what to show*; deterministic CLI and providers handle media tasks. The CLI is not an autonomous LLM.
 
+## Quality-first capability routing
+Quality is the default optimization profile, including for older project configurations without `optimization.profile`. Before expensive or uncertain work, call `node bin/avp.mjs route --project <project-dir> --task <task>` (see `docs/capability-router.md`). It returns a deterministic **plan**, not an executed verification. Only declare external capabilities in `--available` after the host actually provides them. Use only relevant skills, MCP definitions or subagents, avoid whole-repo context dumps, and prioritize independent evidence when risk is high.
+
+Quality does **not** waive human approvals, runtime verification, data privacy or paid API consent. Reuse hashed/approved artifacts, cap retries, and do not claim knowledge of a vendor's remaining subscription quota. If a required capability is missing, report the blocker; do not silently downgrade to unverified video.
+
 ## Mandatory sequence
 1. `avp doctor`, then `avp init <project-dir>` if needed.
 2. Read project brief/config. Run `avp inspect --project <project-dir>`; use `repo-intelligence` tiered retrieval. Do not dump entire codebase into context. Inspect source as read-only, exclude secrets.

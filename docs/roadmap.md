@@ -14,6 +14,10 @@
 - Scene history and automatic restore of old media versions are not implemented. Capture hashes include source content, app URL and viewport to detect changes inside the configured source scope; runtime/browser changes outside that scope still require explicit review. Scene locks protect the current approved artifacts.
 - Automatic agent self-healing and robust true-cost accounting are future milestones.
 
+## Quality-first capability routing baseline
+
+The project includes a declarative capability registry and non-executing `avp route` preflight with Quality as the default policy. It labels required tools, deferred MCP/Graphify escalation, semantic review requirements and estimated paid API budget. It does not measure Coding Agent subscription quota or automatically enforce capability decisions inside the existing production commands.
+
 ## Next milestones
 
 1. End-to-end real Playwright browser capture integration and smoke render in CI under containerized sample app.

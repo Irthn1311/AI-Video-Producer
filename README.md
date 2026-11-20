@@ -55,6 +55,16 @@ flowchart LR
 
 The first module is **`software-demo`**. The architecture leaves room for future explainer and marketing-video modules. AVP v0.1 is an extensible toolkit, **not a hosted or fully autonomous video service**.
 
+## Quality-first capability routing
+
+AVP defaults to the **Quality** optimization profile: strong runtime evidence, independent semantic review for high-risk claims, and explicit human approval checkpoints. The new [Capability Router](docs/capability-router.md) chooses a **preflight plan** from a local registry without automatically connecting MCP servers or spending AI quota. Local search and cached assets remain the first choice; paid voice requests still require consent and estimated budget.
+
+```bash
+node bin/avp.mjs route --project examples/sample-project --task feature-verification --risk high
+```
+
+The router currently plans tool use only; full agent orchestration is an upcoming milestone.
+
 ## Bundled Agent Skills
 
 AVP includes **10 production skills, 7 AVP-authored Remotion workflow skills and the full Apache-licensed Graphify agent skill with its reference files** in [`.agents/skills/`](.agents/skills/). Your coding agent can read the instructions immediately after cloning, without installing a separate skills package.

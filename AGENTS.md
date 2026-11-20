@@ -26,12 +26,17 @@ Produce an honest demo of a user-supplied application from **verified** function
 - A successful technical QA does not equal human approval or proof of product truthfulness.
 - Only claim support for an OS/provider/agent after testing; otherwise label as proposed/adaptable.
 
+## Bundled third-party and Remotion guides
+The complete Graphify agent skill and eight references are checked in at `.agents/skills/graphify/` with their upstream licenses. Its Python executable is not checked in; the `repo-intelligence` skill decides whether code-only graph building is justified. Never invoke a broad semantic pass automatically.
+
+AVP-authored Remotion guides are checked in as `.agents/skills/avp-remotion-*/SKILL.md`; load `avp-remotion-workflow` for Remotion jobs. They are separate from the publisher's official Remotion Agent Skills, which can be installed locally from upstream if needed. Read `docs/skills.md` and `docs/third-party-skills.md`.
+
 ## Suggested skill dispatch
 - research: `repo-intelligence`, `feature-coverage`
 - planning: `storyboard-planner`
 - filming: `browser-capture`, `scene-director`
 - speech: `ai-voiceover`
-- editing: `video-editing`, `production-optimizer`
+- editing: `video-editing`, `production-optimizer`; when Remotion is requested: `avp-remotion-workflow` and selected subskills
 - validation: `video-qa`
 
 ## Minimal agent task example

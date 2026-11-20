@@ -45,7 +45,7 @@ flowchart LR
 | Capability | What it provides |
 | --- | --- |
 | **Agent-agnostic** | `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and focused Agent Skills |
-| **Low-token repo research** | Local source inventory and optional Graphify / Aider RepoMap / Serena guidance |
+| **Low-token repo research** | Local inventory, bundled Graphify skill and optional Graphify CLI / Aider RepoMap / Serena |
 | **Real browser capture** | Playwright-recorded UI interactions in an isolated demo environment |
 | **Scene-level production** | Independent capture, narration, captions, preview, QA, and approval |
 | **Cost-aware voiceover** | Optional Gemini TTS; configurable language and voice, explicit API opt-in, estimated-cost guard |
@@ -54,6 +54,12 @@ flowchart LR
 | **Auditable results** | Local state, scene reports, QA records, and a reproducible project configuration |
 
 The first module is **`software-demo`**. The architecture leaves room for future explainer and marketing-video modules. AVP v0.1 is an extensible toolkit, **not a hosted or fully autonomous video service**.
+
+## Bundled Agent Skills
+
+AVP includes **10 production skills, 7 AVP-authored Remotion workflow skills and the full Apache-licensed Graphify agent skill with its reference files** in [`.agents/skills/`](.agents/skills/). Your coding agent can read the instructions immediately after cloning, without installing a separate skills package.
+
+The Graphify Python runtime, Playwright browser and Remotion npm dependencies are separate executables and still need installation if you use those capabilities. If you specifically want the **official Remotion skill text**, install it from the publisher with `npx skills add remotion-dev/skills`; AVP's bundled `avp-remotion-*` guides are original, not copies of upstream. See [skill catalog](docs/skills.md) and [third-party provenance](docs/third-party-skills.md).
 
 ## Quickstart
 

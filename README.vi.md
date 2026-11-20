@@ -39,6 +39,12 @@ Ghép và xuất MP4
 | **Rendering** | FFmpeg; tùy chọn backend Remotion |
 | **QA** | Kiểm tra kỹ thuật và lưu bằng chứng theo cảnh |
 
+## Agent Skills đã tích hợp sẵn
+
+Repo chứa **10 skill sản xuất video, 7 skill hướng dẫn Remotion do AVP tự viết và bộ Graphify Agent Skill đầy đủ kèm tài liệu tham chiếu** tại [`.agents/skills/`](.agents/skills/). Khi clone repo, Codex/Claude Code/Gemini có thể đọc trực tiếp các hướng dẫn này, không cần đi tải từng skill để có tài liệu cơ bản.
+
+Phân biệt **skill** (hướng dẫn cho agent) với **công cụ thực thi**: Graphify CLI bằng Python, Remotion bằng npm và Chromium vẫn phải được cài khi cần. Nếu muốn dùng đúng bộ Remotion Skills chính thức, có thể tải trực tiếp từ nhà phát hành qua `npx skills add remotion-dev/skills`; nội dung `avp-remotion-*` trong repo là bản do AVP tự soạn. Xem [danh mục skill](docs/skills.md) và [thông tin nguồn/giấy phép](docs/third-party-skills.md).
+
 ## Bắt đầu nhanh
 
 Cần **Node.js 22+**, Git, **FFmpeg/ffprobe**; cài Chromium nếu quay tự động bằng Playwright.

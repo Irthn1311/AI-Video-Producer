@@ -5,6 +5,9 @@ Read `README.md`, `docs/architecture.md`, and `.agents/skills/video-producer/SKI
 ## Primary objective
 Produce an honest demo of a user-supplied application from **verified** functionality, with reusable per-scene artifacts, narration, captions, QA, and a final video. Agent reasoning decides *what to show*; deterministic CLI and providers handle media tasks. The CLI is not an autonomous LLM.
 
+## Reusable MathMate-style scene editing
+When scene-specific editing is required, read `docs/scene-editing.md` and use declarative `scene.edit` instead of generating bespoke Remotion code. Import any authentic secondary footage via `avp asset add`, preview the **edited scene**, run QA and request approval **before** final concat. Do not adjust narration speed to fit a scene. Changing an edit or media asset invalidates only the dependent preview. For simple demos, keep the deterministic FFmpeg path.
+
 ## Quality-first capability routing
 Quality is the default optimization profile, including for older project configurations without `optimization.profile`. Before expensive or uncertain work, call `node bin/avp.mjs route --project <project-dir> --task <task>` (see `docs/capability-router.md`). It returns a deterministic **plan**, not an executed verification. Only declare external capabilities in `--available` after the host actually provides them. Use only relevant skills, MCP definitions or subagents, avoid whole-repo context dumps, and prioritize independent evidence when risk is high.
 

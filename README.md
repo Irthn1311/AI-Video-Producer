@@ -55,6 +55,10 @@ flowchart LR
 
 The first module is **`software-demo`**. The architecture leaves room for future explainer and marketing-video modules. AVP v0.1 is an extensible toolkit, **not a hosted or fully autonomous video service**.
 
+## MathMate-inspired scene editing
+
+Scenes may opt into declarative Remotion editing with source trims, playback speed, zoom/focus, held final frames, chapter labels, callouts and secondary footage insets. Edited scenes are rendered as previews **before** technical QA and human approval; unedited scenes keep the fast FFmpeg workflow. See [Scene Editing](docs/scene-editing.md).
+
 ## Quality-first capability routing
 
 AVP defaults to the **Quality** optimization profile: strong runtime evidence, independent semantic review for high-risk claims, and explicit human approval checkpoints. The new [Capability Router](docs/capability-router.md) chooses a **preflight plan** from a local registry without automatically connecting MCP servers or spending AI quota. Local search and cached assets remain the first choice; paid voice requests still require consent and estimated budget.

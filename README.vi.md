@@ -39,6 +39,10 @@ Ghép và xuất MP4
 | **Rendering** | FFmpeg; tùy chọn backend Remotion |
 | **QA** | Kiểm tra kỹ thuật và lưu bằng chứng theo cảnh |
 
+## Dựng cảnh nâng cao từ kinh nghiệm MathMate
+
+Từng scene có thể chọn chế độ biên tập Remotion qua `scene.edit`: cắt clip, thay tốc độ footage (giữ nguyên giọng đọc), zoom/focus, giữ frame cuối, nhãn chương, callout và video phụ (inset). **Preview được dựng trước khi QA/duyệt**, nên video cuối dùng đúng những cảnh đã kiểm tra. Cảnh không dùng `edit` vẫn chạy FFmpeg nhanh gọn. Xem [hướng dẫn Scene Editing](docs/scene-editing.md).
+
 ## Capability Router — mặc định Quality
 
 AVP mặc định dùng profile **Quality**: ưu tiên bằng chứng runtime, kiểm tra ngữ nghĩa độc lập khi rủi ro cao và các điểm duyệt quan trọng. [Capability Router](docs/capability-router.md) hiện tạo **kế hoạch sử dụng công cụ**, chưa tự kết nối MCP hay tiêu thụ quota. Nó ưu tiên công cụ cục bộ và artifact đã được xác minh trước khi cần tới model hoặc dịch vụ trả phí.

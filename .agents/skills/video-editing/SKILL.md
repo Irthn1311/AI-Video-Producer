@@ -21,3 +21,6 @@ Each scene owns `.avp/scenes/<scene-id>/preview.mp4` and `qa-report.json`. Chang
 
 ## Privacy and truthfulness
 No artificial UI success, hidden real errors, unauthorized music or external assets. Do not treat a successful FFmpeg decode as proof of what the application actually did.
+
+## MathMate editing parity
+For trims, zoom/focus, playback-rate, end-frame holds, callouts or video insets, use the validated `scene.edit` schema and `docs/scene-editing.md`. Add authorized secondary footage using `avp asset add`; do not invent or patch real UI evidence. Run the edited preview and technical/semantic review before approving the scene. Do not speed up voiceover to force it to fit.

@@ -31,10 +31,11 @@ test('Playwright captures real DOM + HTTP evidence and binds it to scene QA',{
     fs.mkdirSync(path.join(root,'app'));fs.writeFileSync(path.join(root,'app','main.ts'),'export const ok=true');
     const config=readJson(path.join(repo,'templates','project.json'));
     config.sourcePath='app';config.appUrl='http://127.0.0.1:'+port;
-    config.voiceover.enabled=false;config.review.mode='autonomous';
+    config.voiceover.enabled=false;config.review.mode='autonomous';config.verification={mode:'claims'};
     config.render={engine:'ffmpeg',width:320,height:180,fps:24,captionsBurned:false};
     config.scenes=[{...config.scenes[0],id:'browser-proof',durationSec:3,
-      narration:'The saved result is visible.',capture:{
+      featureIds:['saved-feature'],narration:'The saved result is visible.',
+      claims:[{id:'claim-saved',featureId:'saved-feature',text:'The saved result is visible',evidenceIds:['saved-api','result-text']}],capture:{
         evidencePolicy:{requireAssertions:true,failOnPageError:true},
         actions:[
           {type:'goto',path:'/'},
@@ -55,10 +56,12 @@ test('Playwright captures real DOM + HTTP evidence and binds it to scene QA',{
     const qa=qaScene(root,config,scene,state);
     assert.equal(qa.pass,true,JSON.stringify(qa));
     assert.equal(qa.checks.captureAssertions,true);
+    assert.equal(qa.checks.claimEvidence,true);
+    assert.deepEqual(qa.claimEvidence.features,['saved-feature']);
     validateSceneQa(root,config,scene,state);
     const evidenceFile=path.join(sceneDir(root,scene.id),'capture-report.json');
     const modified=readJson(evidenceFile);modified.assertions[0].pass=false;writeJson(evidenceFile,modified);
-    assert.throws(()=>validateSceneQa(root,config,scene,state),/capture evidence/);
+    assert.throws(()=>validateSceneQa(root,config,scene,state),/capture evidence|claim-to-evidence/);
     // A newly false expected result must not be recorded as a successful capture.
     scene.capture.actions.find(a=>a.type==='assertText').expectedText='This text is not on the page';
     await assert.rejects(()=>capture(root,config,scene,state,{force:true}));

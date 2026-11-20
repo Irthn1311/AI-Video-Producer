@@ -4,6 +4,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {routeCapabilities,resolveProfile} from '../src/capabilities.mjs';
+import {inspectEvidence,verificationMode} from '../src/evidence.mjs';
 import {parseArgs,getProject,writeJson,readJson,avpDir,available,sha,sceneDir,safeName,run} from '../src/utils.mjs';
 import {loadState,saveState,sceneState,approve,gate,requireUnlocked,staleParts,invalidateOutput} from '../src/state.mjs';
 import {inspect} from '../src/inspect.mjs';
@@ -19,6 +20,7 @@ Usage: avp <command> [--project DIR] [--scene ID] [options]
     --risk high --complexity complex --available id1,id2
     --profile economy|balanced|quality (override project profile)
   plan [--force]             Write planning drafts (preserve edits unless forced)
+  evidence                   Inspect coverage + claim evidence status (local-only)
   approve --stage STAGE      Approve coverage | storyboard | scene | final
   unlock --scene ID          Unlock an approved scene for deliberate changes
   capture --scene ID         Playwright real UI recording
@@ -49,7 +51,7 @@ function hostCapabilities(args) {
   const declared=typeof args.available==='string'?args.available.split(',').map(x=>x.trim()).filter(Boolean):[];
   return [...new Set([...found,...declared])];
 }
-function plan(root,config,opts={}){const dir=path.join(avpDir(root),'planning');fs.mkdirSync(dir,{recursive:true});const cover=path.join(dir,'feature-coverage.json');if(!fs.existsSync(cover)||opts.force)writeJson(cover,{schemaVersion:1,generatedAt:new Date().toISOString(),status:'DRAFT — agent must verify runtime features',features:[...new Set(config.scenes.flatMap(s=>s.featureIds||[]))].map(id=>({id,includedInScenes:config.scenes.filter(s=>(s.featureIds||[]).includes(id)).map(s=>s.id),verifiedInBrowser:false,evidence:[]})),unlistedFeatures:'Agent must inspect target and explain exclusions before approval'});const board=path.join(dir,'storyboard.json');if(!fs.existsSync(board)||opts.force)writeJson(board,{schemaVersion:1,title:config.title,scenes:config.scenes.map(s=>({id:s.id,title:s.title,durationSec:s.durationSec,featureIds:s.featureIds||[],narration:s.narration,actions:s.capture.actions})),status:'DRAFT — human should review before capture'});return {featureCoverage:cover,storyboard:board,durationSec:config.scenes.reduce((a,s)=>a+s.durationSec,0)};}
+function plan(root,config,opts={}){const dir=path.join(avpDir(root),'planning');fs.mkdirSync(dir,{recursive:true});const cover=path.join(dir,'feature-coverage.json');if(!fs.existsSync(cover)||opts.force)writeJson(cover,{schemaVersion:1,generatedAt:new Date().toISOString(),status:'DRAFT — agent must verify runtime features',features:[...new Set(config.scenes.flatMap(s=>s.featureIds||[]))].map(id=>({id,includedInScenes:config.scenes.filter(s=>(s.featureIds||[]).includes(id)).map(s=>s.id),verifiedInBrowser:false,evidence:[]})),unlistedFeatures:'Agent must inspect target and explain exclusions before approval'});const board=path.join(dir,'storyboard.json');if(!fs.existsSync(board)||opts.force)writeJson(board,{schemaVersion:1,title:config.title,scenes:config.scenes.map(s=>({id:s.id,title:s.title,durationSec:s.durationSec,featureIds:s.featureIds||[],narration:s.narration,actions:s.capture.actions,...(s.claims!==undefined?{claims:s.claims}:{})})),status:'DRAFT — human should review before capture'});return {featureCoverage:cover,storyboard:board,durationSec:config.scenes.reduce((a,s)=>a+s.durationSec,0)};}
 function chooseScene(config,args){const id=args.scene;if(!id)throw Error('Use --scene ID');const scene=config.scenes.find(x=>x.id===id);if(!scene)throw Error(`Unknown scene: ${id}`);return scene;}
 async function buildScene(root,config,state,scene,args){if(config.review.mode==='review'){gate(state,config,'coverage',root);gate(state,config,'storyboard',root);}const ss=sceneState(state,scene.id);if(ss.locked){const st=staleParts(scene,config,ss,root);if(Object.values(st).some(Boolean))throw Error(`Locked scene ${scene.id} is stale. Review changes and explicitly unlock.`);return {scene:scene.id,skipped:'locked'};}
   const results={scene:scene.id};const stale=staleParts(scene,config,ss,root);
@@ -64,6 +66,7 @@ async function buildScene(root,config,state,scene,args){if(config.review.mode===
 async function main(){const args=parseArgs(process.argv.slice(2));const command=args._[0]||'help';if(['help','--help','-h'].includes(command)){usage();return;}if(command==='doctor'){process.exitCode=doctor();return;}if(command==='init'){init(args._[1]||args.project);return;}const {root,config}=getProject(args.project||'.');const state=loadState(root);
   switch(command){
     case 'inspect':console.log(JSON.stringify(inspect(root,config),null,2));break;
+    case 'evidence':console.log(JSON.stringify(inspectEvidence(root,config,state,{isCaptureStale:scene=>staleParts(scene,config,sceneState(state,scene.id),root).capture}),null,2));break;
     case 'route':{const task=args.task||args._[1];if(!task)throw Error('Use --task TASK. See docs/capability-router.md');const result=routeCapabilities({task,profile:args.profile||resolveProfile(config),risk:args.risk||'normal',complexity:args.complexity||'normal',available:hostCapabilities(args),paidConsent:args['allow-paid-api']===true,estimatedUsd:args['estimated-usd']===undefined?null:Number(args['estimated-usd']),maxEstimatedUsd:config.budget?.maxEstimatedUsd??null,alreadyReservedUsd:state.budget?.estimatedUsdReserved??0});console.log(JSON.stringify(result,null,2));if(result.status==='blocked')process.exitCode=2;break;}
 
     case 'plan':console.log(JSON.stringify(plan(root,config,{force:!!args.force}),null,2));break;
@@ -99,7 +102,7 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
     case 'qa':console.log(JSON.stringify(qaScene(root,config,chooseScene(config,args),state),null,2));break;
     case 'run':{gate(state,config,'coverage',root);gate(state,config,'storyboard',root);for(const scene of config.scenes){const r=await buildScene(root,config,state,scene,args);console.log(JSON.stringify(r));}console.log(JSON.stringify(await render(root,config,state),null,2));break;}
     case 'render':console.log(JSON.stringify(await render(root,config,state),null,2));break;
-    case 'status':{const scenes=config.scenes.map(s=>{let ss=sceneState(state,s.id);return {id:s.id,locked:ss.locked,approved:ss.approved,stale:staleParts(s,config,ss,root)};});console.log(JSON.stringify({project:config.title,mode:config.review.mode,optimizationProfile:resolveProfile(config),reviews:state.reviews,scenes,budget:state.budget||{ttsCalls:0,estimatedUsdReserved:0},output:state.output||null},null,2));break;}
+    case 'status':{const scenes=config.scenes.map(s=>{let ss=sceneState(state,s.id);return {id:s.id,locked:ss.locked,approved:ss.approved,stale:staleParts(s,config,ss,root)};});console.log(JSON.stringify({project:config.title,mode:config.review.mode,optimizationProfile:resolveProfile(config),verificationMode:verificationMode(config),reviews:state.reviews,scenes,budget:state.budget||{ttsCalls:0,estimatedUsdReserved:0},output:state.output||null},null,2));break;}
     default:throw Error(`Unknown command ${command}. Run avp help.`);
   }
 }

@@ -4,6 +4,7 @@ import {pathToFileURL} from 'node:url';
 import {run,readJson,writeJson,sceneDir,avpDir,loadEnv,sha,atomicWrite,fileHash} from './utils.mjs';
 import {recordArtifact,inputHashes,sceneState,saveState,requireUnlocked,staleParts,gate,validateSceneQa,sceneApprovalValid,finalInputHash, invalidateOutput,reservePaidCall} from './state.mjs';
 import {executeCaptureAssertion,captureEvidencePassed} from './capture-assertions.mjs';
+import {verificationMode,verifySceneClaims,requireCoveragePlan} from './evidence.mjs';
 const seconds=(value)=>Number(value||0);
 export function probe(file){return JSON.parse(run('ffprobe',['-v','error','-show_format','-show_streams','-of','json',file]));}
 export function mediaSeconds(file){return seconds(probe(file).format?.duration);}
@@ -45,7 +46,10 @@ export async function capture(root,config,scene,state,opts={}){
       throw Error('Browser emitted '+pageErrors.length+' uncaught page error(s); evidence rejected');
     const video=page.video();await ctx.close();ctx=null;const rawPath=await video.path();
     const output=path.join(dir,'capture.mp4');const tmp=path.join(dir,'capture.new.mp4');run('ffmpeg',['-y','-v','error','-i',rawPath,'-vf',`fps=${config.render?.fps||30},scale=${config.render?.width||1920}:${config.render?.height||1080}:force_original_aspect_ratio=decrease,pad=${config.render?.width||1920}:${config.render?.height||1080}:(ow-iw)/2:(oh-ih)/2`,'-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p','-an',tmp]);fs.renameSync(tmp,output);
-    const h=inputHashes(scene,config,sceneState(state,scene.id),root);recordArtifact(root,state,scene,'capture',output,h.capture);report.outputDuration=mediaSeconds(output);report.status='PASS';writeJson(path.join(dir,'capture-report.json'),report);return {file:output,report};
+    const h=inputHashes(scene,config,sceneState(state,scene.id),root);recordArtifact(root,state,scene,'capture',output,h.capture);
+    const currentCapture=sceneState(state,scene.id).artifacts.capture;
+    report.captureHash=currentCapture.hash;report.captureInputHash=currentCapture.inputHash;
+    report.outputDuration=mediaSeconds(output);report.status='PASS';writeJson(path.join(dir,'capture-report.json'),report);return {file:output,report};
    }catch(e){report.status='FAIL';report.error=String(e.message).slice(0,750);
     // Keep a local failure screenshot; do not copy private page text or network bodies into reports.
     try{if(ctx){const pages=ctx.pages();if(pages.length){const file=path.join(dir,'capture-failure.png');await pages[0].screenshot({path:file,timeout:6000});report.failureScreenshot='capture-failure.png';}}}catch{}
@@ -111,7 +115,12 @@ export function qaScene(root,config,scene,state){
   const captureReportFile=path.join(dir,'capture-report.json');
   const captureReport=evidenceRequired&&fs.existsSync(captureReportFile)?readJson(captureReportFile):null;
   if(evidenceRequired)checks.captureAssertions=captureEvidencePassed(captureReport,scene.capture.evidencePolicy);
-  const report={scene:scene.id,checks,pass:Object.values(checks).every(Boolean),durationSec:mediaSeconds(file),captionTiming:'Estimated unless externally aligned',visualReviewByHuman:false,previewHash:fileHash(file),previewInputHash:inputHashes(scene,config,ss,root).preview,...(evidenceRequired?{captureReportHash:captureReport?fileHash(captureReportFile):null}: {})};
+  let claimEvidence=null,claimEvidenceError=null;
+  if(verificationMode(config)==='claims'&&(scene.featureIds||[]).length){
+    try{claimEvidence=verifySceneClaims(root,config,scene,state);checks.claimEvidence=claimEvidence.pass===true;}
+    catch(e){checks.claimEvidence=false;claimEvidenceError=e.message;}
+  }
+  const report={scene:scene.id,checks,...(claimEvidence?{claimEvidence}:{}),...(claimEvidenceError?{claimEvidenceError}:{}),pass:Object.values(checks).every(Boolean),durationSec:mediaSeconds(file),captionTiming:'Estimated unless externally aligned',visualReviewByHuman:false,previewHash:fileHash(file),previewInputHash:inputHashes(scene,config,ss,root).preview,...(evidenceRequired?{captureReportHash:captureReport?fileHash(captureReportFile):null}: {})};
   const reportFile=path.join(dir,'qa-report.json');writeJson(reportFile,report);ss.qa={reportHash:fileHash(reportFile),previewHash:report.previewHash,previewInputHash:report.previewInputHash};ss.approved=false;
   invalidateOutput(state);saveState(root,state);return report;
 }
@@ -129,6 +138,7 @@ function finalReport(root,config,state,engine,file){
   saveState(root,state);return report;
 }
 export function render(root,config,state,opts={}){
+  requireCoveragePlan(root,config);
   gate(state,config,'coverage',root);gate(state,config,'storyboard',root);
   const outDir=path.join(avpDir(root),'output');fs.mkdirSync(outDir,{recursive:true});
   const previews=[];

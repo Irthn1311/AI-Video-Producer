@@ -55,6 +55,10 @@ flowchart LR
 
 The first module is **`software-demo`**. The architecture leaves room for future explainer and marketing-video modules. AVP v0.1 is an extensible toolkit, **not a hosted or fully autonomous video service**.
 
+## Evidence-backed feature claims
+
+An optional strict `verification.mode: "claims"` workflow binds each narrated feature claim to explicit Playwright assertion IDs, validates the feature-coverage candidate plan, and requires the current capture report/footage hashes to agree during scene QA and rendering. Inspect local status with `avp evidence`. This does **not** replace independent semantic/editorial review. Read [Claim Evidence](docs/claim-evidence.md).
+
 ## Verified browser captures
 
 Individual scenes can opt into local Playwright DOM/API assertions with `capture.evidencePolicy.requireAssertions=true`. The capture report is bound to scene QA, preventing an old reviewed video from staying approved after evidence is changed. This validates explicitly configured outcomes, not all narration claims. See [Capture Evidence](docs/capture-evidence.md).

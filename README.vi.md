@@ -39,6 +39,10 @@ Ghép và xuất MP4
 | **Rendering** | FFmpeg; tùy chọn backend Remotion |
 | **QA** | Kiểm tra kỹ thuật và lưu bằng chứng theo cảnh |
 
+## Liên kết lời thoại với bằng chứng
+
+Có thể bật `verification.mode: "claims"` để buộc mỗi tính năng được giới thiệu phải có một đoạn lời thoại đã khai báo, dẫn tới các assertion Playwright thật. Scene QA kiểm tra hash của capture và evidence hiện tại; `avp evidence` hiển thị phần nào đã/chưa xác minh. Đây là kiểm chứng theo điều kiện khai báo, **chưa phải đánh giá ngữ nghĩa tự động hoàn chỉnh**. Xem [Claim Evidence](docs/claim-evidence.md).
+
 ## Kiểm chứng hành vi ứng dụng khi quay
 
 AVP có thể cấu hình kiểm tra DOM và response API thật bằng Playwright trong lúc quay cảnh: `capture.evidencePolicy.requireAssertions=true`. Báo cáo `capture-report.json` gắn hash với scene QA; sửa bằng chứng sau khi duyệt khiến QA không còn hợp lệ. Đây là kiểm chứng **các điều kiện được khai báo**, chưa thay thế hoàn toàn Semantic QA. Xem [Capture Evidence](docs/capture-evidence.md).

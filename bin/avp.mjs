@@ -21,6 +21,8 @@ import {auditionVoice,importAudition,listAuditions,chooseAudition,evaluateTiming
 import {visualStatus} from '../src/visual-direction.mjs';
 import {productionNext,productionStep,recoverProduction,productionDiagnose} from '../src/production-executor.mjs';
 import {appStatus,approveApp,trialApp,managedApp} from '../src/app-runtime.mjs';
+import {plan} from '../src/planning.mjs';
+import {workflowNext,workflowStep} from '../src/workflow.mjs';
 const apiSession={calls:0};
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 function usage(){console.log(`AI Video Producer v0.1 (local-first, software-demo)
@@ -69,7 +71,9 @@ Usage: avp <command> [--project DIR] [--scene ID] [options]
   asset add --scene ID --name NAME --file VIDEO  Import an authentic scene inset/shot source
   preview --scene ID         Render scene with FFmpeg or scene.edit Remotion
   qa --scene ID              Probe scene media (technical QA)
-  app status                 Inspect managed app manifest/approval/trial\n  app approve --hash HASH --confirm  Review exact local Node entrypoint/source\n  app trial --allow-launch   Start, probe readiness and clean up disposable app\n  production next            Inspect next step of frozen Build (no execution)
+  app status                 Inspect managed app manifest/approval/trial\n  app approve --hash HASH --confirm  Review exact local Node entrypoint/source\n  app trial --allow-launch   Start, probe readiness and clean up disposable app\n  workflow next              Observe current Build/Production and next bounded task
+  workflow step --hash HASH [--allow-actions] [--allow-launch] [--allow-paid-api] [--retry-failed] [--confirm-reset]  Execute one current task
+  production next            Inspect next step of frozen Build (no execution)
   production diagnose        Explain current typed failure and recovery policy
   production step [--allow-launch] [--allow-actions] [--allow-paid-api] [--retry-failed] [--confirm-reset]  Execute one authorized step
   production recover --confirm  Recover a dead local executor lock; does not retry work
@@ -96,7 +100,6 @@ function hostCapabilities(args) {
   const declared=typeof args.available==='string'?args.available.split(',').map(x=>x.trim()).filter(Boolean):[];
   return [...new Set([...found,...declared])];
 }
-function plan(root,config,opts={}){const dir=path.join(avpDir(root),'planning');fs.mkdirSync(dir,{recursive:true});const cover=path.join(dir,'feature-coverage.json');if(!fs.existsSync(cover)||opts.force)writeJson(cover,{schemaVersion:1,generatedAt:new Date().toISOString(),status:'DRAFT — agent must verify runtime features',features:[...new Set(config.scenes.flatMap(s=>s.featureIds||[]))].map(id=>({id,includedInScenes:config.scenes.filter(s=>(s.featureIds||[]).includes(id)).map(s=>s.id),verifiedInBrowser:false,evidence:[]})),unlistedFeatures:'Agent must inspect target and explain exclusions before approval'});const board=path.join(dir,'storyboard.json');if(!fs.existsSync(board)||opts.force)writeJson(board,{schemaVersion:1,title:config.title,scenes:config.scenes.map(s=>({id:s.id,title:s.title,durationSec:s.durationSec,featureIds:s.featureIds||[],narration:s.narration,actions:s.capture.actions,...(s.claims!==undefined?{claims:s.claims}:{})})),status:'DRAFT — human should review before capture'});return {featureCoverage:cover,storyboard:board,durationSec:config.scenes.reduce((a,s)=>a+s.durationSec,0)};}
 function chooseScene(config,args){const id=args.scene;if(!id)throw Error('Use --scene ID');const scene=config.scenes.find(x=>x.id===id);if(!scene)throw Error(`Unknown scene: ${id}`);return scene;}
 async function buildScene(root,config,state,scene,args){requireBuildGate(root,config,state);if(config.review.mode==='review'){gate(state,config,'coverage',root);gate(state,config,'storyboard',root);}const ss=sceneState(state,scene.id);if(ss.locked){const st=staleParts(scene,config,ss,root);if(Object.values(st).some(Boolean))throw Error(`Locked scene ${scene.id} is stale. Review changes and explicitly unlock.`);return {scene:scene.id,skipped:'locked'};}
   const results={scene:scene.id};const stale=staleParts(scene,config,ss,root);
@@ -147,6 +150,11 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
     case 'app':{
       const op=args._[1]||'status';const result=op==='status'?appStatus(root,config):op==='approve'?approveApp(root,config,{hash:args.hash,confirm:args.confirm===true}):op==='trial'?await trialApp(root,config,{allowLaunch:args['allow-launch']===true}):null;
       if(!result)throw Error('Use app status|approve|trial');console.log(JSON.stringify(result,null,2));break;
+    }
+    case 'workflow':{
+      const op=args._[1]||'next';
+      const result=op==='next'?workflowNext(root,config):op==='step'?await workflowStep(root,{hash:args.hash,allowActions:args['allow-actions']===true,allowLaunch:args['allow-launch']===true,allowPaidApi:args['allow-paid-api']===true,retryFailed:args['retry-failed']===true,confirmReset:args['confirm-reset']===true}):null;
+      if(!result)throw Error('Use workflow next|step');console.log(JSON.stringify(result,null,2));if(['BLOCKED','REVIEW_REQUIRED','AGENT_REQUIRED','RECOVERY_REQUIRED','AUTHORIZATION_REQUIRED'].includes(result.status))process.exitCode=2;break;
     }
     case 'production':{
       const op=args._[1]||'next';

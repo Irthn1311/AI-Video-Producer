@@ -187,15 +187,21 @@ test('managed Node lifecycle is used by actual rehearsal and capture',{skip:proc
       claims:[{id:'heading',featureId:'heading',text:'Managed fixture.',evidenceIds:['heading']}],
       capture:{actions:[{type:'goto',path:'/'},{type:'assertVisible',role:'heading',name:'Managed fixture',evidenceId:'heading'}],evidencePolicy:{requireAssertions:true,failOnPageError:true}}}];
     writeJson(path.join(root,'project.json'),config);
+    let next=await json(root,'workflow','next');assert.equal(next.kind,'analyze');
+    next=(await json(root,'workflow','step','--hash',next.taskHash)).next;assert.equal(next.kind,'skills');
+    next=(await json(root,'workflow','step','--hash',next.taskHash)).next;assert.equal(next.kind,'runtime-review');
     const status=await json(root,'app','status');
     await json(root,'app','approve','--hash',status.manifestHash,'--confirm');
-    assert.equal((await json(root,'app','trial','--allow-launch')).status,'TRIAL_PASS');
-    await json(root,'build','prepare');
-    await deny(root,['build','rehearse','--scene','managed','--allow-actions'],/allow-launch/);
-    assert.equal((await json(root,'build','rehearse','--scene','managed','--allow-actions','--allow-launch')).status,'PASS');
+    next=await json(root,'workflow','next');assert.equal(next.kind,'runtime-trial');
+    await assert.rejects(cli(root,'workflow','step','--hash',next.taskHash),e=>JSON.parse(e.stdout).status==='AUTHORIZATION_REQUIRED');
+    next=(await json(root,'workflow','step','--hash',next.taskHash,'--allow-launch')).next;assert.equal(next.kind,'prepare');
+    next=(await json(root,'workflow','step','--hash',next.taskHash)).next;assert.equal(next.kind,'rehearse');
+    await assert.rejects(cli(root,'workflow','step','--hash',next.taskHash,'--allow-actions'),e=>JSON.parse(e.stdout).status==='AUTHORIZATION_REQUIRED');
+    next=(await json(root,'workflow','step','--hash',next.taskHash,'--allow-actions','--allow-launch')).next;assert.equal(next.kind,'freeze');
     assert.equal((await json(root,'build','freeze','--confirm')).status,'READY');
     await assert.rejects(cli(root,'production','step','--allow-actions'),e=>JSON.parse(e.stdout).code==='APP_LAUNCH_AUTHORIZATION_REQUIRED');
-    assert.equal((await json(root,'production','step','--allow-actions','--allow-launch')).status,'EXECUTED');
+    next=await json(root,'workflow','next');assert.equal(next.kind,'production');assert.equal(next.operation,'capture');
+    assert.equal((await json(root,'workflow','step','--hash',next.taskHash,'--allow-actions','--allow-launch')).status,'EXECUTED');
     const report=readJson(path.join(sceneDir(root,'managed'),'capture-report.json'));
     assert.equal(report.appSession.manifestHash,status.manifestHash);
     assert.equal(report.status,'PASS');

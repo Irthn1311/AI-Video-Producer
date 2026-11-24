@@ -77,8 +77,8 @@ export function matchProjectCapabilities(root,config,{analysis=analyzeProject(ro
     }
   };
 }
-export function recommendSkills(root,config){
-  const matching=matchProjectCapabilities(root,config);
+export function recommendSkills(root,config,options={}){
+  const matching=matchProjectCapabilities(root,config,options);
   return {...matching,nextSteps:matching.unresolved.length?
     ['Review unverified domain signals and promote truly needed ones to capabilityRequirements in project.json',
      'Optional: avp skills search --online (bounded repository research, never installation)',

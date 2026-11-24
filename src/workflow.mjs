@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {avpDir,readJson,writeJson,sha,fileHash,getProject} from './utils.mjs';
 import {sourceFingerprint} from './inspect.mjs';
 import {inspectProject} from './project-intelligence.mjs';
-import {recommendSkills} from './skill-discovery.mjs';
+import {recommendSkills,domainRegistry} from './skill-discovery.mjs';
 import {checkBuild,prepareBuild,requiresBuild,buildDir} from './build.mjs';
 import {loadState} from './state.mjs';
 import {plan} from './planning.mjs';
@@ -104,7 +104,7 @@ function decision(root,config,revision,source,analysisKey,skillsKey){
 function observe(root,config){
   const source=sourceFingerprint(root,config),revision=sha({schemaVersion:1,configHash:sha(config),source,engine:engine()});
   const analysisKey=sha({source,sourcePath:config.sourcePath,engine:engine()});
-  const skillsKey=sha({revision,analysisKey});
+  const skillsKey=sha({revision,analysisKey,registry:sha(domainRegistry)});
   const d=decision(root,config,revision,source,analysisKey,skillsKey),j=readJournal(root,revision);
   const count=j?.events.filter(e=>e.status==='RUNNING').length||0;
   const elapsedMs=j?.events.filter(e=>['EXECUTED','FAILED'].includes(e.status)).reduce((n,e)=>n+(e.elapsedMs||0),0)||0;
@@ -141,7 +141,7 @@ export async function workflowStep(root,opts={}){
     try{
       switch(next.kind){
         case 'analyze':cache(root,'analysis',next.analysisKey,inspectProject(root,config));break;
-        case 'skills':cache(root,'skills',next.skillsKey,recommendSkills(root,config));break;
+        case 'skills':cache(root,'skills',next.skillsKey,recommendSkills(root,config,{analysis:cached(root,'analysis',next.analysisKey)}));break;
         case 'prepare':plan(root,config);prepareBuild(root,config,{force:true});break;
         case 'recompile':prepareBuild(root,config,{force:true});break;
         case 'runtime-trial':await trialApp(root,config,opts);break;

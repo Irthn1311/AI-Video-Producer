@@ -1,5 +1,5 @@
 import path from 'node:path';
-import {executeCaptureAssertion} from './capture-assertions.mjs';
+import {executeCaptureAssertion,validatePressAction} from './capture-assertions.mjs';
 import {executePointerPath} from './pointer-actions.mjs';
 import {ExecutionError} from './execution-errors.mjs';
 
@@ -24,6 +24,7 @@ export async function executeCaptureAction(page,action,{appUrl,dir,report,adapte
       await executePointerPath(page,action,locator);break;
     case 'click':await locator(page,action).click({timeout:30000});break;
     case 'fill':await locator(page,action).fill(action.value??'');break;
+    case 'press':validatePressAction(action);await locator(page,action).press(action.key,{timeout:action.timeoutMs||30000});break;
     case 'hover':await locator(page,action).hover({timeout:30000});break;
     case 'waitFor':await locator(page,action).waitFor({state:'visible',timeout:action.timeoutMs||30000});break;
     case 'pause':await page.waitForTimeout(Math.max(0,Math.min(action.ms||500,15000)));break;

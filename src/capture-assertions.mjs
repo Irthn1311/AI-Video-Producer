@@ -8,6 +8,12 @@ function finitePositiveTimeout(a){
   if(a.timeoutMs!==undefined&&(!Number.isInteger(a.timeoutMs)||a.timeoutMs<100||a.timeoutMs>120000))
     throw Error(a.type+'.timeoutMs must be 100–120000');
 }
+const pressKeys=new Set(['Enter','Escape','Tab','Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Backspace','Delete','Home','End']);
+export function validatePressAction(a){
+  if(!locatorPresent(a)||!pressKeys.has(a.key))throw Error('press requires a deterministic locator and an allowed single key');
+  finitePositiveTimeout(a);
+  if(a.evidenceId!==undefined||a.evidenceScreenshot!==undefined)throw Error('press is an interaction, not an evidence assertion');
+}
 function locatorPresent(a){return locatorFields.some(k=>typeof a[k]==='string'&&a[k].trim());}
 function nonempty(s,max,label){
   if(typeof s!=='string'||!s.trim()||s.length>max)throw Error(label+' must be nonempty text up to '+max+' chars');
@@ -23,6 +29,7 @@ export function validateCaptureEvidenceConfig(capture){
   const ids=new Set();let assertCount=0;
   for(const a of capture.actions){
     if(!a||typeof a!=='object'||Array.isArray(a))throw Error('capture action must be an object');
+    if(a.type==='press')validatePressAction(a);
     if(!evidenceTypes.has(a.type))continue;
     assertCount++;
     if(!locatorPresent(a))throw Error(a.type+' requires a testId, role, label or text locator');

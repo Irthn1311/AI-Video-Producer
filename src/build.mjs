@@ -7,6 +7,7 @@ import {matchProjectCapabilities} from './skill-discovery.mjs';
 import {gate,inputHashes} from './state.mjs';
 import {requireCoveragePlan,verificationMode} from './evidence.mjs';
 import {rehearsalPath} from './rehearsal.mjs';
+import {adapterStatus} from './adapters.mjs';
 
 const SCHEMA=1;
 const files=['project-profile','feature-inventory','capability-profile','toolchain-lock',
@@ -94,8 +95,9 @@ function makeArtifacts(root,config){
     requirements:config.scenes.map(s=>({
       sceneId:s.id,requiredActions:[...new Set(s.capture.actions.map(a=>a.type))],
       requestedAdapter:s.capture?.adapter||null,
+      adapter:s.capture.adapter?adapterStatus(root,config,s):null,
       discoveredExternalSkills:[],unresolvedActions:[...new Set(s.capture.actions.map(a=>a.type))]
-        .filter(x=>!actionTypes.has(x)),
+        .filter(x=>!actionTypes.has(x)&&!(x==='pointerPath'&&s.capture.adapter)),
       limitations:'External skill/adapter search and authoring not yet automated'
     }))};
   const toolchain={...toolchainSnapshot(config,root),...source,
@@ -219,7 +221,9 @@ function checkArtifacts(root,config){
       problems.push(issue('BUILD_TOOLCHAIN_DRIFT','Local toolchain availability/version changed','Reprepare and rehearse Build'));
     for(const item of currentTools.tools.filter(v=>v.required&&!v.available))
       problems.push(issue('BUILD_TOOL_MISSING',item.id+' is required but unavailable','Install/authorize '+item.id+' then rebuild'));
-    for(const req of currentMatching.requirements.filter(x=>x.explicitRequired&&x.status!=='BUNDLED_IMPLEMENTATION_AVAILABLE')){
+    const adapters=artifacts['capability-profile'].requirements.map(x=>x.adapter).filter(x=>x?.status==='APPROVED_FOR_TRIAL');
+    const adapterNeeds=new Set(adapters.flatMap(x=>x.binding.capabilities.map(c=>c.id)));
+    for(const req of currentMatching.requirements.filter(x=>x.explicitRequired&&x.status!=='BUNDLED_IMPLEMENTATION_AVAILABLE'&&!adapterNeeds.has(x.id))){
       problems.push(issue('BUILD_REQUIRED_CAPABILITY_MISSING',req.id+' is explicitly required but only '+req.status,
         'Review/test a project-specific adapter, or revise capabilityRequirements; research candidates cannot authorize execution'));
     }
@@ -229,8 +233,8 @@ function checkArtifacts(root,config){
     for(const capability of artifacts['capability-profile'].requirements){
       if(capability.unresolvedActions.length)
         problems.push(issue('BUILD_UNKNOWN_ACTION',capability.sceneId+': '+capability.unresolvedActions.join(', '),'Provide a reviewed, sandboxed project adapter in future adapter flow'));
-      if(capability.requestedAdapter)
-        problems.push(issue('BUILD_ADAPTER_UNSUPPORTED',capability.sceneId+' requires custom adapter not yet verified','Implement and test adapter before Production'));
+      if(capability.requestedAdapter&&capability.adapter?.status!=='APPROVED_FOR_TRIAL')
+        problems.push(issue('BUILD_ADAPTER_UNSUPPORTED',capability.sceneId+': '+(capability.adapter?.reason||'Adapter not approved'),'Review local declarative adapter and run avp adapter approve --scene ID --confirm'));
     }
     warnings.push('Bundled capability matching only; optional external GitHub search is read-only research, never auto-installed or trusted.');
     if(!artifacts['creative-brief'].audience)
@@ -250,7 +254,8 @@ function verifyRehearsals(root,config){
     proofHashes[scene.id]=fileHash(target);
     if(r.status!=='PASS'||r.scope!=='BUILD_REHEARSAL_ONLY'||r.sceneId!==scene.id||
        r.captureInputHash!==inputHashes(scene,config,{},root).capture||
-       r.actionsHash!==sha(scene.capture.actions)){
+       r.actionsHash!==sha(scene.capture.actions)||
+       (scene.capture.adapter&&sha(r.adapterBinding??null)!==sha(adapterStatus(root,config,scene).binding??null))){
       problems.push(issue('BUILD_REHEARSAL_STALE',scene.id+' rehearsal is failed or stale','Rehearse the current actions against the app'));
       continue;
     }
@@ -351,7 +356,7 @@ export function freezeBuild(root,config,state){
     sceneCount:config.scenes.length,buildLock:file(root,'build-lock')};
 }
 export function requiresBuild(root,config){
-  return config.workflow?.requireBuild===true||exists(file(root,'build-state'));
+  return config.workflow?.requireBuild===true||config.scenes.some(s=>Boolean(s.capture.adapter))||exists(file(root,'build-state'));
 }
 /** Legacy projects remain compatible until they opt into Build or are initialized with it. */
 export function requireBuildGate(root,config,state){

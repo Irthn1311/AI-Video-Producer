@@ -14,6 +14,7 @@ import {capture,voice,captions,preview,qaScene,render,probe} from '../src/media.
 import {snapshotScene,restoreSceneSnapshot,listSceneSnapshots} from '../src/revisions.mjs';
 import {prepareBuild,checkBuild,freezeBuild,requireBuildGate,requiresBuild} from '../src/build.mjs';
 import {rehearseScene} from '../src/rehearsal.mjs';
+import {adapterStatus,approveAdapter} from '../src/adapters.mjs';
 const apiSession={calls:0};
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 function usage(){console.log(`AI Video Producer v0.1 (local-first, software-demo)
@@ -22,6 +23,8 @@ Usage: avp <command> [--project DIR] [--scene ID] [options]
   init [DIR]                 Copy a project configuration (no API calls)
   inspect                    Inventory source paths without LLM
   analyze                    Discover static stack/routes/capability clues (NOT runtime-verified)
+  adapter check --scene ID   Inspect local declarative adapter approval status
+  adapter approve --scene ID --confirm  Authorize exact local recipe for trial
   skills recommend           Match project-specific needs to bundled tools/skills locally
   skills search --online     Search public GitHub repo candidates for unmet needs (read-only, no installation)
     [--refresh]             Refresh one-day cached metadata results (sends predefined queries only)
@@ -86,6 +89,13 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
   switch(command){
     case 'inspect':console.log(JSON.stringify(inspect(root,config),null,2));break;
     case 'analyze':console.log(JSON.stringify(inspectProject(root,config),null,2));break;
+    case 'adapter':{
+      const scene=chooseScene(config,args),op=args._[1];
+      if(op==='check')console.log(JSON.stringify(adapterStatus(root,config,scene),null,2));
+      else if(op==='approve')console.log(JSON.stringify(approveAdapter(root,config,scene,{confirm:args.confirm===true}),null,2));
+      else throw Error('Use adapter check|approve --scene ID');
+      break;
+    }
     case 'skills':{
       const op=args._[1]||'recommend';
       if(op==='recommend'){

@@ -5,6 +5,7 @@ import {run,readJson,writeJson,sceneDir,avpDir,loadEnv,sha,atomicWrite,fileHash}
 import {recordArtifact,inputHashes,sceneState,saveState,requireUnlocked,staleParts,gate,validateSceneQa,sceneApprovalValid,finalInputHash, invalidateOutput,reservePaidCall} from './state.mjs';
 import {captureEvidencePassed} from './capture-assertions.mjs';
 import {executeCaptureAction,locator} from './capture-actions.mjs';
+import {requireAdapter,restrictAdapterContext} from './adapters.mjs';
 import {verificationMode,verifySceneClaims,requireCoveragePlan} from './evidence.mjs';
 import {sentenceParts,measureSpeech,alignNarration,validateCaptionRows} from './audio-timing.mjs';
 const seconds=(value)=>Number(value||0);
@@ -12,11 +13,12 @@ export function probe(file){return JSON.parse(run('ffprobe',['-v','error','-show
 export function mediaSeconds(file){return seconds(probe(file).format?.duration);}
 export {locator} from './capture-actions.mjs';
 export async function capture(root,config,scene,state,opts={}){
+  const adapter=requireAdapter(root,config,scene);
   const ss=sceneState(state,scene.id);requireUnlocked(state,scene.id);const parts=staleParts(scene,config,ss,root);if(!parts.capture&&!opts.force)return {reused:true,file:path.join(sceneDir(root,scene.id),'capture.mp4')};
   let chromium;try{({chromium}=await import('@playwright/test'));}catch{throw Error('Playwright not installed. Run npm install, then npx playwright install chromium.');}
   const dir=sceneDir(root,scene.id);fs.mkdirSync(dir,{recursive:true});const raw=path.join(dir,'raw');fs.mkdirSync(raw,{recursive:true});
-  const browser=await chromium.launch({headless:true});let ctx;const report={scene:scene.id,actions:[],assertions:[],status:'IN_PROGRESS',startedAt:new Date().toISOString()};
-  try{ctx=await browser.newContext({viewport:{width:config.render?.width||1920,height:config.render?.height||1080},recordVideo:{dir:raw,size:{width:config.render?.width||1920,height:config.render?.height||1080}}});const page=await ctx.newPage();const pageErrors=[];report.pageErrors=pageErrors;page.on('pageerror',err=>pageErrors.push(err.message.slice(0,500)));const start=Date.now();
+  const browser=await chromium.launch({headless:true});let ctx;const report={scene:scene.id,...(adapter?{adapterBinding:adapter}:{}),actions:[],assertions:[],status:'IN_PROGRESS',startedAt:new Date().toISOString()};
+  try{ctx=await browser.newContext({...(adapter?{serviceWorkers:'block'}:{}),viewport:{width:config.render?.width||1920,height:config.render?.height||1080},recordVideo:{dir:raw,size:{width:config.render?.width||1920,height:config.render?.height||1080}}});if(adapter)await restrictAdapterContext(ctx,config.appUrl);const page=await ctx.newPage();const pageErrors=[];report.pageErrors=pageErrors;page.on('pageerror',err=>pageErrors.push(err.message.slice(0,500)));const start=Date.now();
     for(const a of scene.capture.actions){const startAction=Date.now();
       await executeCaptureAction(page,a,{appUrl:config.appUrl,dir,report});
       report.actions.push({type:a.type,ms:Date.now()-startAction});}

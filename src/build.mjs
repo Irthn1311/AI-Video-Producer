@@ -172,6 +172,14 @@ function checkArtifacts(root,config){
   }
   if(!problems.length){
     const artifacts=Object.fromEntries(files.map(n=>[n,readJson(file(root,n))]));
+    // A mutable draft may be reviewed, but can never be frozen if its recipe
+    // differs from the canonical project and inspected source. This rejects
+    // accidental/adversarial edits to capture actions in the compiled plan.
+    const canonical=makeArtifacts(root,config);
+    for(const name of files){
+      if(sha(artifacts[name])!==sha(canonical[name]))
+        problems.push(issue('BUILD_NONCANONICAL_ARTIFACT',name+' differs from canonical inputs','Edit project.json/reviewed planning, then prepare Build --force'));
+    }
     const production=artifacts['production-plan'];
     const expectedRefs=Object.fromEntries(files.filter(n=>n!=='production-plan').map(n=>[n,sha(artifacts[n])]));
     if(sha(production.artifactHashes)!==sha(expectedRefs))

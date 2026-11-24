@@ -46,6 +46,6 @@ export async function executeCaptureAction(page,action,{appUrl,dir,report,adapte
   }}catch(e){
     const code=e instanceof ExecutionError?e.failureCode:action.type==='goto'?'APP_NAVIGATION_FAILED':
       ['assertVisible','assertText','assertAttribute','clickExpectResponse'].includes(action.type)?'ASSERTION_FAILED':'LOCATOR_OR_INTERACTION_FAILED';
-    throw new ExecutionError(code,String(e.message||e),{actionType:action.type,actionIndex:report.actions.length});
+    throw new ExecutionError(code,String(e.message||e),{actionType:action.type,actionIndex:Array.isArray(report?.actions)?report.actions.length:undefined});
   }
 }

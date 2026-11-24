@@ -103,6 +103,10 @@
 
 ## A6. Canonical Build Package & Readiness Gate — P0 / KIẾN TRÚC QUAN TRỌNG NHẤT
 
+> **Triển khai nền tảng đầu tiên (PARTIAL, chưa tick Done):** `src/build.mjs`, `src/rehearsal.mjs`, `src/capture-actions.mjs` và CLI `avp build prepare/rehearse/check/freeze` đã tạo manifest, chạy rehearsal, phân biệt blocker/review/ready và giữ frozen plan theo hash. New `avp init` bật Build Gate; project cũ vẫn tương thích. **Chưa đạt đầy đủ A6** vì thiếu capability discovery/adapter security, creative choices, rehearsal rủi ro theo domain và benchmark unknown app. Chỉ tick từng mục khi có bằng chứng nghiệm thu đúng phạm vi, không coi schema/CLI là hoàn thành. Xem `docs/build-production.md` và PR triển khai.
+
+
+
 - [ ] `A6-01` Định nghĩa artifact schemas và versioning cho `project-profile`, `feature-inventory`, `capability-profile`, `toolchain-lock`, `creative-brief`, `storyboard`, `production-plan`, `build-report`.
 - [ ] `A6-02` Có **Build Orchestrator** với stages có đầu vào/đầu ra, checkpoint, trạng thái `PENDING/RUNNING/PASS/REVIEW_REQUIRED/BLOCKED/FAILED`.
 - [ ] `A6-03` Có **Build Readiness Gate**: feature feasibility, tool availability/trust, adapter tests, runtime rehearsal, storyboard, voice/style choices, evidence plan, dependency map, budget.

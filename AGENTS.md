@@ -9,6 +9,10 @@ Before any AVP enhancement or PR, inspect `docs/MASTER_UPGRADE_CHECKLIST.md`. Ch
 ## Primary objective
 Produce an honest demo of a user-supplied application from **verified** functionality, with reusable per-scene artifacts, narration, captions, QA, and a final video. Agent reasoning decides *what to show*; deterministic CLI and providers handle media tasks. The CLI is not an autonomous LLM.
 
+## Two-phase BUILD rule for opted-in projects
+
+Read `docs/build-production.md` before creating a new project. For `workflow.requireBuild=true`, first analyze the project/source, propose and review coverage/creative direction and storyboard, then run `avp build prepare`, `build rehearse --scene ID --allow-actions` on an authorized disposable test environment, `build check`, and `build freeze --confirm`. Rehearsal is a real-browser dry run but **not** production evidence. Never manually write `build-lock.json` or edit the frozen `production-plan.json` to suppress blockers. If Build returns `BLOCKED`, resolve source/tool/adapter issues; do not jump ahead to Production or fake a PASS. Build is a first deterministic implementation, not autonomous Internet skill discovery.
+
 ## Local scene revisions (no automatic approval rollback)
 
 When experimenting with a scene, offer a local `avp snapshot --scene ID` beforehand, then `avp versions` to inspect the retained revisions. A restore requires the scene to be unlocked and an explicit user-approved `--confirm`. Always rerun current evidence/QA checks and obtain scene/final approval after restore. Never treat a snapshot's saved QA report as proof that the restored current scene passed. Refer to `docs/scene-versions.md`. Avoid excessive snapshots and keep private recordings out of remote repos.

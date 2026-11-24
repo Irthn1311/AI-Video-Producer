@@ -3,43 +3,23 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {run,readJson,writeJson,sceneDir,avpDir,loadEnv,sha,atomicWrite,fileHash} from './utils.mjs';
 import {recordArtifact,inputHashes,sceneState,saveState,requireUnlocked,staleParts,gate,validateSceneQa,sceneApprovalValid,finalInputHash, invalidateOutput,reservePaidCall} from './state.mjs';
-import {executeCaptureAssertion,captureEvidencePassed} from './capture-assertions.mjs';
+import {captureEvidencePassed} from './capture-assertions.mjs';
+import {executeCaptureAction,locator} from './capture-actions.mjs';
 import {verificationMode,verifySceneClaims,requireCoveragePlan} from './evidence.mjs';
 import {sentenceParts,measureSpeech,alignNarration,validateCaptionRows} from './audio-timing.mjs';
 const seconds=(value)=>Number(value||0);
 export function probe(file){return JSON.parse(run('ffprobe',['-v','error','-show_format','-show_streams','-of','json',file]));}
 export function mediaSeconds(file){return seconds(probe(file).format?.duration);}
-export function locator(page,action){if(action.testId)return page.getByTestId(action.testId);if(action.role)return page.getByRole(action.role,action.name?{name:action.name,exact:true}:{});if(action.label)return page.getByLabel(action.label,{exact:true});if(action.text)return page.getByText(action.text,{exact:true});throw Error('Action requires testId, role, label, or text (avoid brittle CSS selectors)');}
+export {locator} from './capture-actions.mjs';
 export async function capture(root,config,scene,state,opts={}){
   const ss=sceneState(state,scene.id);requireUnlocked(state,scene.id);const parts=staleParts(scene,config,ss,root);if(!parts.capture&&!opts.force)return {reused:true,file:path.join(sceneDir(root,scene.id),'capture.mp4')};
   let chromium;try{({chromium}=await import('@playwright/test'));}catch{throw Error('Playwright not installed. Run npm install, then npx playwright install chromium.');}
   const dir=sceneDir(root,scene.id);fs.mkdirSync(dir,{recursive:true});const raw=path.join(dir,'raw');fs.mkdirSync(raw,{recursive:true});
   const browser=await chromium.launch({headless:true});let ctx;const report={scene:scene.id,actions:[],assertions:[],status:'IN_PROGRESS',startedAt:new Date().toISOString()};
   try{ctx=await browser.newContext({viewport:{width:config.render?.width||1920,height:config.render?.height||1080},recordVideo:{dir:raw,size:{width:config.render?.width||1920,height:config.render?.height||1080}}});const page=await ctx.newPage();const pageErrors=[];report.pageErrors=pageErrors;page.on('pageerror',err=>pageErrors.push(err.message.slice(0,500)));const start=Date.now();
-    for(const a of scene.capture.actions){const startAction=Date.now();switch(a.type){
-      case 'goto': {const url=new URL(a.path||'/',config.appUrl);const allowed=new URL(config.appUrl);if(url.origin!==allowed.origin)throw Error('Cross-origin navigation blocked for capture');await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:60000});break;}
-      case 'click':await locator(page,a).click({timeout:30000});break;
-      case 'fill':await locator(page,a).fill(a.value??'');break;
-      case 'hover':await locator(page,a).hover({timeout:30000});break;
-      case 'waitFor':await locator(page,a).waitFor({state:'visible',timeout:a.timeoutMs||30000});break;
-      case 'pause':await page.waitForTimeout(Math.max(0,Math.min(a.ms||500,15000)));break;
-      case 'scroll':await page.mouse.wheel(0,a.y||500);break;
-      case 'screenshot':await page.screenshot({path:path.join(dir,`${scene.id}-${report.actions.length}.png`)});break;
-      case 'assertVisible':
-      case 'assertText':
-      case 'assertAttribute':
-      case 'clickExpectResponse': {
-        const evidence=await executeCaptureAssertion(page,a,locator,config.appUrl);
-        report.assertions.push(evidence);
-        if(a.evidenceScreenshot===true){
-          const name='evidence-'+report.assertions.length+'.png';
-          await page.screenshot({path:path.join(dir,name)});
-          evidence.screenshot=name;
-        }
-        break;
-      }
-      default:throw Error('Unsupported capture action: '+a.type);
-    }report.actions.push({type:a.type,ms:Date.now()-startAction});}
+    for(const a of scene.capture.actions){const startAction=Date.now();
+      await executeCaptureAction(page,a,{appUrl:config.appUrl,dir,report});
+      report.actions.push({type:a.type,ms:Date.now()-startAction});}
     let remaining=scene.durationSec*1000-(Date.now()-start);if(remaining>0)await page.waitForTimeout(remaining);
     report.finalUrl=page.url();report.pageErrors=pageErrors;report.elapsedMs=Date.now()-start;
     if(scene.capture.evidencePolicy?.requireAssertions&&report.assertions.length===0)throw Error('Missing required browser assertions');

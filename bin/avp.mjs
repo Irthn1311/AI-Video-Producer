@@ -10,6 +10,8 @@ import {loadState,saveState,sceneState,approve,gate,requireUnlocked,staleParts,i
 import {inspect} from '../src/inspect.mjs';
 import {capture,voice,captions,preview,qaScene,render,probe} from '../src/media.mjs';
 import {snapshotScene,restoreSceneSnapshot,listSceneSnapshots} from '../src/revisions.mjs';
+import {prepareBuild,checkBuild,freezeBuild,requireBuildGate,requiresBuild} from '../src/build.mjs';
+import {rehearseScene} from '../src/rehearsal.mjs';
 const apiSession={calls:0};
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 function usage(){console.log(`AI Video Producer v0.1 (local-first, software-demo)
@@ -22,6 +24,11 @@ Usage: avp <command> [--project DIR] [--scene ID] [options]
     --profile economy|balanced|quality (override project profile)
   plan [--force]             Write planning drafts (preserve edits unless forced)
   evidence                   Inspect coverage + claim evidence status (local-only)
+  build prepare [--force]    Generate canonical Build Package drafts (does not claim runtime verification)
+  build rehearse --scene ID --allow-actions   Run real Playwright actions in test app, without recording
+  build check               Report BLOCKED / REVIEW_REQUIRED / READY with actionable reasons
+  build freeze --confirm    Freeze an evidence-checked Production Plan
+  build gate                Check whether Production is authorized (read-only except report)
   approve --stage STAGE      Approve coverage | storyboard | scene | final
   unlock --scene ID          Unlock an approved scene for deliberate changes
   snapshot --scene ID [--label NOTE]   Save local scene media revision (no approval change)
@@ -44,7 +51,9 @@ Examples:
 Video production runs locally; TTS is an opt-in external paid API. Price limits are estimate-based, not provider billing caps.
 `);}
 function doctor(){const tools={node:process.version,ffmpeg:available('ffmpeg'),ffprobe:available('ffprobe'),playwright:fs.existsSync(path.join(ROOT,'node_modules','@playwright','test')),remotion:fs.existsSync(path.join(ROOT,'node_modules','remotion'))};console.log(JSON.stringify({tools,notes:['Playwright browser install: npx playwright install chromium','FFmpeg with libx264, libass subtitles recommended','Gemini TTS requires GEMINI_API_KEY in local .env and --allow-paid-api','No API key required for inspect/plan']},null,2));return tools.ffmpeg&&tools.ffprobe?0:1;}
-function init(directory){const root=path.resolve(directory||'avp-project');fs.mkdirSync(root,{recursive:true});const dest=path.join(root,'project.json');if(fs.existsSync(dest))throw Error(`Refusing to overwrite ${dest}`);fs.copyFileSync(path.join(ROOT,'templates','project.json'),dest);console.log(`Created ${dest}. Edit sourcePath, appUrl, language, features, scenes before running.`);}
+function init(directory){const root=path.resolve(directory||'avp-project');fs.mkdirSync(root,{recursive:true});const dest=path.join(root,'project.json');if(fs.existsSync(dest))throw Error(`Refusing to overwrite ${dest}`);fs.copyFileSync(path.join(ROOT,'templates','project.json'),dest);
+  const template=readJson(dest);template.workflow={requireBuild:true};writeJson(dest,template);
+  console.log(`Created ${dest}. Edit sourcePath, appUrl, language, features, scenes before running.`);}
 function hostCapabilities(args) {
   const found=[];
   if(available('ffprobe')) found.push('ffprobe-qa');
@@ -57,7 +66,7 @@ function hostCapabilities(args) {
 }
 function plan(root,config,opts={}){const dir=path.join(avpDir(root),'planning');fs.mkdirSync(dir,{recursive:true});const cover=path.join(dir,'feature-coverage.json');if(!fs.existsSync(cover)||opts.force)writeJson(cover,{schemaVersion:1,generatedAt:new Date().toISOString(),status:'DRAFT — agent must verify runtime features',features:[...new Set(config.scenes.flatMap(s=>s.featureIds||[]))].map(id=>({id,includedInScenes:config.scenes.filter(s=>(s.featureIds||[]).includes(id)).map(s=>s.id),verifiedInBrowser:false,evidence:[]})),unlistedFeatures:'Agent must inspect target and explain exclusions before approval'});const board=path.join(dir,'storyboard.json');if(!fs.existsSync(board)||opts.force)writeJson(board,{schemaVersion:1,title:config.title,scenes:config.scenes.map(s=>({id:s.id,title:s.title,durationSec:s.durationSec,featureIds:s.featureIds||[],narration:s.narration,actions:s.capture.actions,...(s.claims!==undefined?{claims:s.claims}:{})})),status:'DRAFT — human should review before capture'});return {featureCoverage:cover,storyboard:board,durationSec:config.scenes.reduce((a,s)=>a+s.durationSec,0)};}
 function chooseScene(config,args){const id=args.scene;if(!id)throw Error('Use --scene ID');const scene=config.scenes.find(x=>x.id===id);if(!scene)throw Error(`Unknown scene: ${id}`);return scene;}
-async function buildScene(root,config,state,scene,args){if(config.review.mode==='review'){gate(state,config,'coverage',root);gate(state,config,'storyboard',root);}const ss=sceneState(state,scene.id);if(ss.locked){const st=staleParts(scene,config,ss,root);if(Object.values(st).some(Boolean))throw Error(`Locked scene ${scene.id} is stale. Review changes and explicitly unlock.`);return {scene:scene.id,skipped:'locked'};}
+async function buildScene(root,config,state,scene,args){requireBuildGate(root,config,state);if(config.review.mode==='review'){gate(state,config,'coverage',root);gate(state,config,'storyboard',root);}const ss=sceneState(state,scene.id);if(ss.locked){const st=staleParts(scene,config,ss,root);if(Object.values(st).some(Boolean))throw Error(`Locked scene ${scene.id} is stale. Review changes and explicitly unlock.`);return {scene:scene.id,skipped:'locked'};}
   const results={scene:scene.id};const stale=staleParts(scene,config,ss,root);
   if(stale.capture)results.capture=await capture(root,config,scene,state);
   if(config.voiceover.enabled!==false&&staleParts(scene,config,ss,root).voice)results.voice=await voice(root,config,scene,state,{allowPaidApi:!!args['allow-paid-api'],budgetSession:apiSession});
@@ -71,10 +80,30 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
   switch(command){
     case 'inspect':console.log(JSON.stringify(inspect(root,config),null,2));break;
     case 'evidence':console.log(JSON.stringify(inspectEvidence(root,config,state,{isCaptureStale:scene=>staleParts(scene,config,sceneState(state,scene.id),root).capture}),null,2));break;
+    case 'build':{
+      const op=args._[1]||'check';
+      if(op==='prepare'){
+        plan(root,config,{force:!!args.force});
+        console.log(JSON.stringify(prepareBuild(root,config,{force:!!args.force}),null,2));break;
+      }
+      if(op==='rehearse'){
+        const scene=chooseScene(config,args);
+        console.log(JSON.stringify(await rehearseScene(root,config,scene,{allowActions:args['allow-actions']===true}),null,2));break;
+      }
+      if(op==='check'||op==='gate'){
+        const result=checkBuild(root,config,state);console.log(JSON.stringify(result,null,2));
+        if(!result.ready)process.exitCode=2;break;
+      }
+      if(op==='freeze'){
+        if(args.confirm!==true)throw Error('Freezing the Build approves the Production Plan; add --confirm after review');
+        console.log(JSON.stringify(freezeBuild(root,config,state),null,2));break;
+      }
+      throw Error('Use build prepare|rehearse|check|gate|freeze. See docs/build-production.md');
+    }
     case 'route':{const task=args.task||args._[1];if(!task)throw Error('Use --task TASK. See docs/capability-router.md');const result=routeCapabilities({task,profile:args.profile||resolveProfile(config),risk:args.risk||'normal',complexity:args.complexity||'normal',available:hostCapabilities(args),paidConsent:args['allow-paid-api']===true,estimatedUsd:args['estimated-usd']===undefined?null:Number(args['estimated-usd']),maxEstimatedUsd:config.budget?.maxEstimatedUsd??null,alreadyReservedUsd:state.budget?.estimatedUsdReserved??0});console.log(JSON.stringify(result,null,2));if(result.status==='blocked')process.exitCode=2;break;}
 
     case 'plan':console.log(JSON.stringify(plan(root,config,{force:!!args.force}),null,2));break;
-    case 'approve':{const stage=args.stage;if(!stage)throw Error('Use --stage coverage|storyboard|scene|final');if(stage==='coverage'||stage==='storyboard'){const file=path.join(avpDir(root),'planning',stage==='coverage'?'feature-coverage.json':'storyboard.json');if(!fs.existsSync(file))throw Error('Generate and review plans first: avp plan');}if(stage==='scene'){const sc=chooseScene(config,args);const q=path.join(sceneDir(root,sc.id),'qa-report.json');if(!fs.existsSync(q)||!readJson(q).pass)throw Error('Run avp qa and review a passing preview before approval');}approve(root,state,config,stage,args.scene);console.log(`Approved ${stage}${args.scene?' '+args.scene:''}`);break;}
+    case 'approve':{const stage=args.stage;if(stage==='scene'||stage==='final')requireBuildGate(root,config,state);if(!stage)throw Error('Use --stage coverage|storyboard|scene|final');if(stage==='coverage'||stage==='storyboard'){const file=path.join(avpDir(root),'planning',stage==='coverage'?'feature-coverage.json':'storyboard.json');if(!fs.existsSync(file))throw Error('Generate and review plans first: avp plan');}if(stage==='scene'){const sc=chooseScene(config,args);const q=path.join(sceneDir(root,sc.id),'qa-report.json');if(!fs.existsSync(q)||!readJson(q).pass)throw Error('Run avp qa and review a passing preview before approval');}approve(root,state,config,stage,args.scene);console.log(`Approved ${stage}${args.scene?' '+args.scene:''}`);break;}
     case 'unlock':{const s=chooseScene(config,args),ss=sceneState(state,s.id);if(!ss.locked)throw Error('Scene is not locked');ss.locked=false;ss.approved=false;invalidateOutput(state);state.history.push({event:'unlocked',scene:s.id,at:new Date().toISOString()});saveState(root,state);console.log(`Unlocked ${s.id}`);break;}
     case 'snapshot':{const s=chooseScene(config,args);
       console.log(JSON.stringify(snapshotScene(root,config,s,state,{label:args.label===undefined?null:args.label}),null,2));break;}
@@ -84,9 +113,10 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
       if(args.confirm!==true)throw Error('Restoring scene media is destructive: unlock the scene, then pass --confirm --version v0001');
       if(typeof args.version!=='string')throw Error('Specify --version v0001');
       console.log(JSON.stringify(restoreSceneSnapshot(root,config,s,state,args.version),null,2));break;}
-    case 'capture':{const s=chooseScene(config,args);gate(state,config,'coverage',root);gate(state,config,'storyboard',root);console.log(JSON.stringify(await capture(root,config,s,state,{force:!!args.force}),null,2));break;}
-    case 'attach':{const s=chooseScene(config,args);if(!args.file)throw Error('Specify --file path/to/authentic-video.mp4');requireUnlocked(state,s.id);const file=path.resolve(args.file);if(!fs.existsSync(file))throw Error('File not found');const p=probe(file);if(!p.streams.some(x=>x.codec_type==='video'))throw Error('Not a video');const dir=sceneDir(root,s.id);fs.mkdirSync(dir,{recursive:true});const output=path.join(dir,'capture.mp4');const temp=path.join(dir,'capture.attach.mp4');const {run}=await import('../src/utils.mjs');run('ffmpeg',['-y','-v','error','-i',file,'-vf',`fps=${config.render.fps},scale=${config.render.width}:${config.render.height}:force_original_aspect_ratio=decrease,pad=${config.render.width}:${config.render.height}:(ow-iw)/2:(oh-ih)/2`,'-an','-c:v','libx264','-pix_fmt','yuv420p',temp]);fs.renameSync(temp,output);const {inputHashes,recordArtifact}=await import('../src/state.mjs');recordArtifact(root,state,s,'capture',output,inputHashes(s,config,sceneState(state,s.id),root).capture);console.log(`Attached authentic recorded footage for ${s.id}`);break;}
+    case 'capture':{requireBuildGate(root,config,state);const s=chooseScene(config,args);gate(state,config,'coverage',root);gate(state,config,'storyboard',root);console.log(JSON.stringify(await capture(root,config,s,state,{force:!!args.force}),null,2));break;}
+    case 'attach':{requireBuildGate(root,config,state);const s=chooseScene(config,args);if(!args.file)throw Error('Specify --file path/to/authentic-video.mp4');requireUnlocked(state,s.id);const file=path.resolve(args.file);if(!fs.existsSync(file))throw Error('File not found');const p=probe(file);if(!p.streams.some(x=>x.codec_type==='video'))throw Error('Not a video');const dir=sceneDir(root,s.id);fs.mkdirSync(dir,{recursive:true});const output=path.join(dir,'capture.mp4');const temp=path.join(dir,'capture.attach.mp4');const {run}=await import('../src/utils.mjs');run('ffmpeg',['-y','-v','error','-i',file,'-vf',`fps=${config.render.fps},scale=${config.render.width}:${config.render.height}:force_original_aspect_ratio=decrease,pad=${config.render.width}:${config.render.height}:(ow-iw)/2:(oh-ih)/2`,'-an','-c:v','libx264','-pix_fmt','yuv420p',temp]);fs.renameSync(temp,output);const {inputHashes,recordArtifact}=await import('../src/state.mjs');recordArtifact(root,state,s,'capture',output,inputHashes(s,config,sceneState(state,s.id),root).capture);console.log(`Attached authentic recorded footage for ${s.id}`);break;}
     case 'asset':{
+      requireBuildGate(root,config,state);
       if(args._[1]!=='add')throw Error('Use asset add --scene ID --name NAME --file VIDEO');
       const s=chooseScene(config,args),name=safeName(args.name),ss=sceneState(state,s.id);
       requireUnlocked(state,s.id);
@@ -108,13 +138,13 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
       console.log(JSON.stringify({scene:s.id,asset:name,file:dest}));
       break;
     }
-    case 'voice':console.log(JSON.stringify(await voice(root,config,chooseScene(config,args),state,{allowPaidApi:!!args['allow-paid-api'],force:!!args.force,budgetSession:apiSession}),null,2));break;
-    case 'captions':console.log(JSON.stringify(captions(root,config,chooseScene(config,args),state,{force:!!args.force}),null,2));break;
-    case 'preview':console.log(JSON.stringify(await preview(root,config,chooseScene(config,args),state,{force:!!args.force}),null,2));break;
-    case 'qa':console.log(JSON.stringify(qaScene(root,config,chooseScene(config,args),state),null,2));break;
-    case 'run':{gate(state,config,'coverage',root);gate(state,config,'storyboard',root);for(const scene of config.scenes){const r=await buildScene(root,config,state,scene,args);console.log(JSON.stringify(r));}console.log(JSON.stringify(await render(root,config,state),null,2));break;}
-    case 'render':console.log(JSON.stringify(await render(root,config,state),null,2));break;
-    case 'status':{const scenes=config.scenes.map(s=>{let ss=sceneState(state,s.id);return {id:s.id,locked:ss.locked,approved:ss.approved,stale:staleParts(s,config,ss,root)};});console.log(JSON.stringify({project:config.title,mode:config.review.mode,optimizationProfile:resolveProfile(config),verificationMode:verificationMode(config),reviews:state.reviews,scenes,budget:state.budget||{ttsCalls:0,estimatedUsdReserved:0},output:state.output||null},null,2));break;}
+    case 'voice':requireBuildGate(root,config,state);console.log(JSON.stringify(await voice(root,config,chooseScene(config,args),state,{allowPaidApi:!!args['allow-paid-api'],force:!!args.force,budgetSession:apiSession}),null,2));break;
+    case 'captions':requireBuildGate(root,config,state);console.log(JSON.stringify(captions(root,config,chooseScene(config,args),state,{force:!!args.force}),null,2));break;
+    case 'preview':requireBuildGate(root,config,state);console.log(JSON.stringify(await preview(root,config,chooseScene(config,args),state,{force:!!args.force}),null,2));break;
+    case 'qa':requireBuildGate(root,config,state);console.log(JSON.stringify(qaScene(root,config,chooseScene(config,args),state),null,2));break;
+    case 'run':{requireBuildGate(root,config,state);gate(state,config,'coverage',root);gate(state,config,'storyboard',root);for(const scene of config.scenes){const r=await buildScene(root,config,state,scene,args);console.log(JSON.stringify(r));}console.log(JSON.stringify(await render(root,config,state),null,2));break;}
+    case 'render':requireBuildGate(root,config,state);console.log(JSON.stringify(await render(root,config,state),null,2));break;
+    case 'status':{const build=requiresBuild(root,config)?checkBuild(root,config,state):{status:'LEGACY_NOT_ENFORCED'};const scenes=config.scenes.map(s=>{let ss=sceneState(state,s.id);return {id:s.id,locked:ss.locked,approved:ss.approved,stale:staleParts(s,config,ss,root)};});console.log(JSON.stringify({project:config.title,mode:config.review.mode,optimizationProfile:resolveProfile(config),verificationMode:verificationMode(config),build:{status:build.status,problems:build.problems||[],reviewRequired:build.reviewRequired||[]},reviews:state.reviews,scenes,budget:state.budget||{ttsCalls:0,estimatedUsdReserved:0},output:state.output||null},null,2));break;}
     default:throw Error(`Unknown command ${command}. Run avp help.`);
   }
 }

@@ -32,7 +32,7 @@ const policies={
   INTERRUPTED_STEP:['RECONCILE_FIRST','Inspect actual artifacts and app state; explicitly reconcile or retry after safe reset.'],
   STEP_EXECUTION_FAILED:['INSPECT_MANUALLY','Inspect local tool reports; cause is not established. Explicitly decide whether to repair or retry.']
 };
-const safeAction=new Set(['goto','pointerPath','click','fill','press','hover','waitFor','pause','scroll','screenshot','assertVisible','assertText','assertAttribute','clickExpectResponse']);
+const safeAction=new Set(['goto','pointerPath','click','fill','press','hover','waitFor','pause','scroll','screenshot','assertVisible','assertText','assertAttribute','clickExpectResponse','assertCanvasPixels']);
 export class ExecutionError extends Error {
   constructor(code,message,details={}){
     super(message);this.name='ExecutionError';this.failureCode=Object.hasOwn(policies,code)?code:'STEP_EXECUTION_FAILED';

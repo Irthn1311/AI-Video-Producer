@@ -22,7 +22,7 @@ const files=['project-profile','feature-inventory','capability-profile','toolcha
   'creative-brief','storyboard','production-plan'];
 const actionTypes=new Set(['goto','click','fill','press','hover','waitFor','pause','scroll','screenshot',
   'assertVisible','assertText','assertAttribute','clickExpectResponse']);
-const assertionTypes=new Set(['assertVisible','assertText','assertAttribute','clickExpectResponse']);
+const assertionTypes=new Set(['assertVisible','assertText','assertAttribute','clickExpectResponse','assertCanvasPixels']);
 const versionedName=name=>name+'.json';
 export const buildDir=root=>path.join(avpDir(root),'build');
 const file=(root,name)=>path.join(buildDir(root),versionedName(name));

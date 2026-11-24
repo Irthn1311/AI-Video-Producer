@@ -9,13 +9,13 @@ import {withAppRuntime,appRuntimeFingerprint} from './app-runtime.mjs';
 
 const MAX_ACTIONS=50;
 const allowedActions=new Set(['goto','click','fill','press','hover','waitFor','pause','scroll',
-  'assertVisible','assertText','assertAttribute','clickExpectResponse','pointerPath']);
-const assertionTypes=new Set(['assertVisible','assertText','assertAttribute','clickExpectResponse']);
+  'assertVisible','assertText','assertAttribute','clickExpectResponse','assertCanvasPixels','pointerPath']);
+const assertionTypes=new Set(['assertVisible','assertText','assertAttribute','clickExpectResponse','assertCanvasPixels']);
 // Declarative browser actions cannot prove arbitrary semantic capabilities,
 // e.g. multi-context pairing, handwriting gestures or payment settlement.
 const verifiedByV1=new Set(['data-assertions','timed-capture','app-feature-demo','pointer-interaction']);
 const actionKeys=new Set(['type','path','testId','role','name','label','text','value','key','timeoutMs',
-  'ms','y','evidenceId','evidenceScreenshot','expectedText','attribute','expectedValue','response','points']);
+  'ms','y','evidenceId','evidenceScreenshot','expectedText','attribute','expectedValue','response','points','canvasClass','pixelColor','minPixels','maxPixels']);
 const responseKeys=new Set(['pathContains','method','status','bodyIncludes']);
 const idValid=id=>typeof id==='string'&&/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(id);
 const adapterDir=(root,id)=>path.join(avpDir(root),'adapters',safeName(id));
@@ -56,6 +56,8 @@ function boundedActions(actions,label,{allowEmpty=false}={}){
     if(a.type==='pointerPath'){validatePointerPath(a);continue;}
     for(const [k,v] of Object.entries(a)){
       if(k==='points')throw Error('points are only valid for pointerPath');
+      if(['pixelColor','minPixels','maxPixels'].includes(k)&&a.type!=='assertCanvasPixels')throw Error('Pixel bounds only valid for assertCanvasPixels');
+      if(['minPixels','maxPixels'].includes(k)){if(!Number.isSafeInteger(v)||v<0||v>2000000)throw Error('Canvas pixel bound out of range');continue;}
       if(k==='key'&&a.type!=='press')throw Error('key is only valid for press');
       if(k==='response'){keys(v,responseKeys,'response');continue;}
       if(['ms','y','timeoutMs'].includes(k)){
@@ -71,7 +73,7 @@ function boundedActions(actions,label,{allowEmpty=false}={}){
         a.path.includes('\\')||/[\u0000-\u001f]/.test(a.path))
         throw Error('Adapter goto must use a local absolute path, not a URL');
     }else if(['click','fill','press','hover','waitFor',...assertionTypes].includes(a.type)&&
-      !['testId','role','label','text'].some(k=>typeof a[k]==='string'&&a[k].trim()))
+      !['testId','role','label','text','canvasClass'].some(k=>typeof a[k]==='string'&&a[k].trim()))
       throw Error('Adapter action '+a.type+' requires a deterministic locator');
   }
   validateCaptureEvidenceConfig({actions,evidencePolicy:{requireAssertions:!allowEmpty}});

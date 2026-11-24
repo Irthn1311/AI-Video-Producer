@@ -1,9 +1,10 @@
 import path from 'node:path';
-import {executeCaptureAssertion,validatePressAction} from './capture-assertions.mjs';
+import {executeCaptureAssertion,validatePressAction,validateCanvasLocator} from './capture-assertions.mjs';
 import {executePointerPath} from './pointer-actions.mjs';
 import {ExecutionError} from './execution-errors.mjs';
 
 export function locator(page,action){
+  if(action.canvasClass!==undefined){validateCanvasLocator(action);return page.locator('canvas.'+action.canvasClass);}
   if(action.testId)return page.getByTestId(action.testId);
   if(action.role)return page.getByRole(action.role,action.name?{name:action.name,exact:true}:{});
   if(action.label)return page.getByLabel(action.label,{exact:true});
@@ -13,7 +14,8 @@ export function locator(page,action){
 
 /** Shared deterministic Playwright action runner used for BUILD rehearsal and real capture. */
 export async function executeCaptureAction(page,action,{appUrl,dir,report,adapter=false}){
-  try{switch(action.type){
+  try{if((action.canvasClass!==undefined||action.type==='assertCanvasPixels')&&!adapter)throw new ExecutionError('ADAPTER_OR_POLICY_BLOCKED','Canvas pixel evidence and class locator require a reviewed adapter');
+  switch(action.type){
     case 'goto':{
       const url=new URL(action.path||'/',appUrl),allowed=new URL(appUrl);
       if(url.origin!==allowed.origin)throw new ExecutionError('ADAPTER_OR_POLICY_BLOCKED','Cross-origin navigation blocked for capture/rehearsal');
@@ -32,6 +34,7 @@ export async function executeCaptureAction(page,action,{appUrl,dir,report,adapte
     case 'screenshot':if(dir)await page.screenshot({path:path.join(dir,'capture-step-'+report.actions.length+'.png')});break;
     case 'assertVisible':
     case 'assertText':
+    case 'assertCanvasPixels':
     case 'assertAttribute':
     case 'clickExpectResponse':{
       const evidence=await executeCaptureAssertion(page,action,locator,appUrl);
@@ -46,7 +49,7 @@ export async function executeCaptureAction(page,action,{appUrl,dir,report,adapte
     default:throw new ExecutionError('ADAPTER_OR_POLICY_BLOCKED','Unsupported capture action: '+action.type);
   }}catch(e){
     const code=e instanceof ExecutionError?e.failureCode:action.type==='goto'?'APP_NAVIGATION_FAILED':
-      ['assertVisible','assertText','assertAttribute','clickExpectResponse'].includes(action.type)?'ASSERTION_FAILED':'LOCATOR_OR_INTERACTION_FAILED';
+      ['assertVisible','assertText','assertAttribute','clickExpectResponse','assertCanvasPixels'].includes(action.type)?'ASSERTION_FAILED':'LOCATOR_OR_INTERACTION_FAILED';
     throw new ExecutionError(code,String(e.message||e),{actionType:action.type,actionIndex:Array.isArray(report?.actions)?report.actions.length:undefined});
   }
 }

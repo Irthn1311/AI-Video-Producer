@@ -4,6 +4,7 @@ import {available,avpDir,readJson,writeJson,sha,fileHash,loadEnv} from './utils.
 import {inspect,sourceFingerprint} from './inspect.mjs';
 import {analyzeProject} from './project-intelligence.mjs';
 import {matchProjectCapabilities} from './skill-discovery.mjs';
+import {projectAdapterSnapshot,adapterStatus,adapterActions} from './adapters.mjs';
 import {gate,inputHashes} from './state.mjs';
 import {requireCoveragePlan,verificationMode} from './evidence.mjs';
 import {rehearsalPath} from './rehearsal.mjs';
@@ -54,7 +55,7 @@ function expectedStoryboard(config){
     ...(s.claims!==undefined?{claims:s.claims}:{})}));
 }
 function makeArtifacts(root,config){
-  const inventory=inspect(root,config),analysis=analyzeProject(root,config),matching=matchProjectCapabilities(root,config,{analysis}),sourceHash=inventory.contentFingerprint;
+  const inventory=inspect(root,config),analysis=analyzeProject(root,config),matching=matchProjectCapabilities(root,config,{analysis}),adapters=projectAdapterSnapshot(root,config),sourceHash=inventory.contentFingerprint;
   const source={configHash:sha(config),sourceFingerprint:sourceHash};
   const coverage=sourcePlan(root,'feature-coverage.json');
   const storyboard=sourcePlan(root,'storyboard.json');
@@ -88,6 +89,7 @@ function makeArtifacts(root,config){
     })),
     matchingMode:matching.mode,registryHash:matching.registryHash,
     matchedRequirements:matching.requirements,
+    projectAdapterBindings:adapters,
     explicitRequired:matching.explicitRequired,
     unresolved:matching.unresolved,
     limitations:'Bundled implementations are not verified feature workflows. Guidance is not implementation; external repositories are untrusted research only.',
@@ -100,7 +102,7 @@ function makeArtifacts(root,config){
     }))};
   const toolchain={...toolchainSnapshot(config,root),...source,
     domainCapabilityLock:{registryHash:matching.registryHash,requirements:matching.requirements,
-      externalInstalls:[],externalSkillsExecuted:false}};
+      projectAdapters:adapters,externalInstalls:[],externalSkillsExecuted:false}};
   const brief={schemaVersion:SCHEMA,...source,title:config.title,
     audience:config.creative?.audience??null,
     goal:config.creative?.goal??'Demonstrate observed application functionality',
@@ -137,7 +139,11 @@ function makeArtifacts(root,config){
       id:s.id,title:s.title,durationSec:s.durationSec,featureIds:s.featureIds||[],
       shotIds:(s.edit?.shots?.length?s.edit.shots:[{source:'capture'}]).map((_,i)=>s.id+'-shot-'+String(i+1).padStart(2,'0')),
       captureInputHash:inputHashes(s,config,{},root).capture,
-      captureRecipe:s.capture,claims:s.claims||[],narration:s.narration,
+      captureRecipe:s.capture.adapter?{...s.capture,
+        adapterBinding:adapters.find(x=>x.sceneId===s.id),
+        actions:adapters.find(x=>x.sceneId===s.id)?.status==='TRIAL_PASS'?
+          adapterActions(root,config,s):s.capture.actions}:s.capture,
+      claims:s.claims||[],narration:s.narration,
       captionTiming:s.captionTiming||null,edit:s.edit||null,
       voice:config.voiceover,attemptLimit:config.budget?.maxRetryPerScene??0,
       startState:'PROJECT_DEFINED_NOT_VERIFIED',
@@ -156,7 +162,10 @@ export function prepareBuild(root,config,{force=false}={}){
     const old=readJson(stateFile);
     if(old.configHash===currentHash&&old.sourceFingerprint===sourceHash){
       const missing=files.filter(name=>!exists(file(root,name)));
-      if(!missing.length)return {reused:true,buildDir:folder,status:'PENDING_GATE',
+      const previousLock=exists(file(root,'toolchain-lock'))?readJson(file(root,'toolchain-lock')):null;
+      const adaptersUnchanged=sha(previousLock?.domainCapabilityLock?.projectAdapters??[])===
+        sha(projectAdapterSnapshot(root,config));
+      if(!missing.length&&adaptersUnchanged)return {reused:true,buildDir:folder,status:'PENDING_GATE',
         note:'Use avp build check; edit project.json and --force to regenerate stale Build artifacts.'};
     }
   }
@@ -213,24 +222,43 @@ function checkArtifacts(root,config){
       problems.push(issue('BUILD_PLAN_DRIFT','Compiled production plan is stale','Reprepare Build package'));
     const currentTools=toolchainSnapshot(config,root);
     const currentMatching=matchProjectCapabilities(root,config);
+    const currentAdapters=projectAdapterSnapshot(root,config);
     if(sha(artifacts['toolchain-lock'])!==sha({...currentTools,configHash:currentConfig,sourceFingerprint:currentSource,
       domainCapabilityLock:{registryHash:currentMatching.registryHash,requirements:currentMatching.requirements,
-        externalInstalls:[],externalSkillsExecuted:false}}))
+        projectAdapters:currentAdapters,externalInstalls:[],externalSkillsExecuted:false}}))
       problems.push(issue('BUILD_TOOLCHAIN_DRIFT','Local toolchain availability/version changed','Reprepare and rehearse Build'));
     for(const item of currentTools.tools.filter(v=>v.required&&!v.available))
       problems.push(issue('BUILD_TOOL_MISSING',item.id+' is required but unavailable','Install/authorize '+item.id+' then rebuild'));
-    for(const req of currentMatching.requirements.filter(x=>x.explicitRequired&&x.status!=='BUNDLED_IMPLEMENTATION_AVAILABLE')){
+    for(const req of currentMatching.requirements.filter(x=>x.explicitRequired&&x.status!=='BUNDLED_IMPLEMENTATION_AVAILABLE'&&
+      !currentAdapters.some(a=>a.status==='TRIAL_PASS'&&a.verifiedCapabilities?.includes(x.id)))){
       problems.push(issue('BUILD_REQUIRED_CAPABILITY_MISSING',req.id+' is explicitly required but only '+req.status,
         'Review/test a project-specific adapter, or revise capabilityRequirements; research candidates cannot authorize execution'));
     }
     const optionalGaps=currentMatching.unresolved.filter(x=>!x.required);
     if(optionalGaps.length)
       warnings.push('Unverified source-derived needs require review; do not promise these features in video until supported: '+optionalGaps.map(x=>x.id).join(', '));
+    for(const scene of config.scenes.filter(s=>s.capture?.adapter)){
+      if(scene.claims?.length){
+        try{
+          const ids=new Set(adapterActions(root,config,scene).map(a=>a.evidenceId).filter(Boolean));
+          for(const claim of scene.claims||[])for(const id of claim.evidenceIds||[])
+            if(!ids.has(id))problems.push(issue('BUILD_ADAPTER_CLAIM_MISMATCH',scene.id+': claim '+claim.id+' missing '+id,
+              'Update adapter recipe to assert each declared claim before reapproval and trial'));
+        }catch(e){problems.push(issue('BUILD_ADAPTER_INVALID',scene.id+': '+e.message,'Correct and reapprove adapter manifest'));}
+      }
+    }
     for(const capability of artifacts['capability-profile'].requirements){
       if(capability.unresolvedActions.length)
         problems.push(issue('BUILD_UNKNOWN_ACTION',capability.sceneId+': '+capability.unresolvedActions.join(', '),'Provide a reviewed, sandboxed project adapter in future adapter flow'));
-      if(capability.requestedAdapter)
-        problems.push(issue('BUILD_ADAPTER_UNSUPPORTED',capability.sceneId+' requires custom adapter not yet verified','Implement and test adapter before Production'));
+      if(capability.requestedAdapter){
+        const adapter=currentAdapters.find(a=>a.sceneId===capability.sceneId);
+        if(!adapter||adapter.status!=='TRIAL_PASS')
+          problems.push(issue('BUILD_ADAPTER_UNVERIFIED',capability.sceneId+': '+(adapter?.reason||'adapter trial not ready'),
+            'Review current manifest, run avp adapters approve then adapters trial --allow-actions; rebuild'));
+        else if(adapter.unprovenCapabilities?.length)
+          problems.push(issue('BUILD_ADAPTER_CAPABILITY_UNPROVEN',capability.sceneId+': '+adapter.unprovenCapabilities.join(', '),
+            'Declarative actions cannot prove this capability. Build a separately reviewed/tested runtime adapter; do not bypass quality gate.'));
+      }
     }
     warnings.push('Bundled capability matching only; optional external GitHub search is read-only research, never auto-installed or trusted.');
     if(!artifacts['creative-brief'].audience)
@@ -248,15 +276,18 @@ function verifyRehearsals(root,config){
     }
     const r=readJson(target);
     proofHashes[scene.id]=fileHash(target);
+    let effectiveActions;
+    try{effectiveActions=adapterActions(root,config,scene);}
+    catch(e){problems.push(issue('BUILD_ADAPTER_INVALID',scene.id+': '+e.message,'Fix adapter manifest and re-trial'));continue;}
     if(r.status!=='PASS'||r.scope!=='BUILD_REHEARSAL_ONLY'||r.sceneId!==scene.id||
        r.captureInputHash!==inputHashes(scene,config,{},root).capture||
-       r.actionsHash!==sha(scene.capture.actions)){
+       r.actionsHash!==sha(effectiveActions)){
       problems.push(issue('BUILD_REHEARSAL_STALE',scene.id+' rehearsal is failed or stale','Rehearse the current actions against the app'));
       continue;
     }
-    const required=scene.capture.actions.filter(a=>assertionTypes.has(a.type));
+    const required=effectiveActions.filter(a=>assertionTypes.has(a.type));
     const matched=required.every(a=>r.assertions.some(x=>x.id===(a.evidenceId||a.type)&&x.type===a.type&&x.pass===true));
-    if(r.actions.length!==scene.capture.actions.length||!matched||
+    if(r.actions.length!==effectiveActions.length||!matched||
        (scene.capture.evidencePolicy?.requireAssertions&&required.length===0)||
        (scene.capture.evidencePolicy?.failOnPageError!==false&&r.pageErrors?.length)){
       problems.push(issue('BUILD_REHEARSAL_UNVERIFIED',scene.id+' missing required action/DOM/API proof','Fix app/action; rerun rehearsal'));

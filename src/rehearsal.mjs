@@ -3,6 +3,7 @@ import path from 'node:path';
 import {avpDir,writeJson,sha} from './utils.mjs';
 import {inputHashes} from './state.mjs';
 import {executeCaptureAction} from './capture-actions.mjs';
+import {adapterActions,requireAdapterReady,protectAdapterBrowser} from './adapters.mjs';
 
 export function rehearsalPath(root,sceneId){
   return path.join(avpDir(root),'build','rehearsals',sceneId+'.json');
@@ -14,6 +15,8 @@ export function rehearsalPath(root,sceneId){
  * User must explicitly authorize running potentially state-mutating UI actions.
  */
 export async function rehearseScene(root,config,scene,{allowActions=false}={}){
+  const adapterProof=requireAdapterReady(root,config,scene);
+  const effectiveActions=adapterActions(root,config,scene);
   if(!allowActions)throw Error('Rehearsal interacts with the app. Add --allow-actions for an authorized isolated demo/test environment.');
   let chromium;
   try{({chromium}=await import('@playwright/test'));}
@@ -21,7 +24,8 @@ export async function rehearseScene(root,config,scene,{allowActions=false}={}){
   const file=rehearsalPath(root,scene.id),fingerprint=inputHashes(scene,config,{},root).capture;
   const record={
     schemaVersion:1,sceneId:scene.id,scope:'BUILD_REHEARSAL_ONLY',status:'RUNNING',
-    captureInputHash:fingerprint,actionsHash:sha(scene.capture.actions),
+    captureInputHash:fingerprint,actionsHash:sha(effectiveActions),
+    adapter:adapterProof?{id:adapterProof.id,manifestHash:adapterProof.manifestHash,receiptHash:adapterProof.receiptHash}:null,
     startedAt:new Date().toISOString(),actions:[],assertions:[],pageErrors:[],
     caution:'Rehearsal is not evidence of the footage produced later.'
   };
@@ -30,9 +34,10 @@ export async function rehearseScene(root,config,scene,{allowActions=false}={}){
   try{
     browser=await chromium.launch({headless:true});
     context=await browser.newContext({viewport:{width:config.render?.width||1920,height:config.render?.height||1080}});
+    await protectAdapterBrowser(context,config,scene);
     const page=await context.newPage();
     page.on('pageerror',err=>record.pageErrors.push(err.message.slice(0,500)));
-    for(const action of scene.capture.actions){
+    for(const action of effectiveActions){
       const start=Date.now();
       await executeCaptureAction(page,action,{appUrl:config.appUrl,dir:null,report:record});
       record.actions.push({type:action.type,ms:Date.now()-start});

@@ -52,6 +52,10 @@ node bin/avp.mjs run --project ./my-video
 
 `--allow-actions` means you have authorized running the real project actions, including clicks/forms. Run against disposable test data, NEVER production payment, deletion or live customer accounts. BUILD rehearsal does not record a film, and its report is `scope=BUILD_REHEARSAL_ONLY`. Actual `capture-report.json` of Production must be generated separately.
 
+## Reviewed project adapters
+
+For app-specific behavior not implemented by the built-in declarative capture recipe, AVP now supports a **project-authored declarative adapter**. Use `avp adapters init --scene ID --id NAME --capability app-feature-demo`, edit `avp-adapters/NAME/manifest.json` and set `scene.capture.adapter=NAME`. Run `avp adapters approve --scene ID --confirm` after reviewing the recipe and `avp adapters trial --scene ID --allow-actions` against an authorized loopback test app. `build prepare --force` includes the successful hashes. Build rehearsal and production capture run the same verified recipe, but cannot use any unreviewed external scripts. See [Project Adapters](project-adapters.md) for exact contract, limitations and security warnings.
+
 ## Artifact handoff
 
 The directory `.avp/build/` contains:

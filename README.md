@@ -55,6 +55,10 @@ flowchart LR
 
 The first module is **`software-demo`**. The architecture leaves room for future explainer and marketing-video modules. AVP v0.1 is an extensible toolkit, **not a hosted or fully autonomous video service**.
 
+## Reviewed project adapters and sandbox-limited browser trials (F-03b — PARTIAL)
+
+Projects can declare a **per-scene declarative Playwright adapter** in `avp-adapters/<id>/manifest.json`, require explicit review, run an isolated-browser trial and bind its evidence to the BUILD gate. The same reviewed recipe is reused during rehearsal and production capture; changes invalidate stale proofs. This **does not run external scripts or provide an OS sandbox**. [Project Adapters](docs/project-adapters.md).
+
 ## Domain-specific skills and toolchain research (F-03 — PARTIAL)
 
 `avp skills recommend` maps an app's source-derived needs to existing AVP implementations and local guidance; optional `avp skills search --online` performs bounded, read-only GitHub repository research for unmet needs. Guidance and search results are **not executable capabilities**, and explicitly required unsupported skills block Build. [Skill Discovery](docs/skill-discovery.md).

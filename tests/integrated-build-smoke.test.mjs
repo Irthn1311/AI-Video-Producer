@@ -103,17 +103,25 @@ async function exercise(kind){
     assert.equal((await json(root,'timing','check')).status,'PASS');
     assert.equal((await json(root,'visual','check')).status,'PASS');
     assert.equal((await json(root,'build','freeze','--confirm')).status,'READY');
+    const next=await json(root,'production','next');assert.equal(next.kind,'capture');
+    await assert.rejects(cli(root,'production','step'),e=>JSON.parse(e.stdout).code==='ACTION_AUTHORIZATION_REQUIRED');
+    const first=await json(root,'production','step','--allow-actions');
+    assert.equal(first.status,'EXECUTED');assert.equal(first.step.kind,'capture');assert.equal(first.next.kind,'voice');
+    const second=await json(root,'production','step');assert.equal(second.status,'EXECUTED');assert.equal(second.runId,first.runId);assert.equal(second.step.kind,'voice');
     for(const scene of current.scenes){
-      const cap=await json(root,'capture','--scene',scene.id);
+      const cap=scene.id==='overview'?{report:readJson(path.join(sceneDir(root,scene.id),'capture-report.json'))}:await json(root,'capture','--scene',scene.id);
       assert.equal(cap.report.status,'PASS');
       if(scene.id==='workflow'&&kind==='canvas')assert.ok(cap.report.actions.some(a=>a.type==='pointerPath'));
-      assert.equal((await json(root,'voice','--scene',scene.id)).reusedSelectedAudio,true);
+      if(scene.id!=='overview')assert.equal((await json(root,'voice','--scene',scene.id)).reusedSelectedAudio,true);
       await json(root,'captions','--scene',scene.id);await json(root,'preview','--scene',scene.id);
       const qa=await json(root,'qa','--scene',scene.id);
       assert.equal(qa.pass,true,JSON.stringify(qa));assert.equal(qa.checks.claimEvidence,true);
       await cli(root,'approve','--stage','scene','--scene',scene.id);
     }
-    assert.equal((await json(root,'render')).pass,true);await cli(root,'approve','--stage','final');
+    assert.equal((await json(root,'production','next')).kind,'render');
+    const rendered=await json(root,'production','step');assert.equal(rendered.status,'EXECUTED');assert.equal(rendered.step.kind,'render');
+    assert.equal(rendered.next.code,'FINAL_REVIEW');await cli(root,'approve','--stage','final');
+    assert.equal((await json(root,'production','next')).status,'COMPLETE');
     const unchanged=sceneDir(root,'overview'),changed=sceneDir(root,'workflow');
     const keep=['capture.mp4','voice.wav','preview.mp4','qa-report.json'].map(n=>fileHash(path.join(unchanged,n)));
     const keepChanged=['capture.mp4','voice.wav'].map(n=>fileHash(path.join(changed,n)));

@@ -1,0 +1,11 @@
+# Framed story demo — candidate
+
+PR35 passed all four exact-head runs. JS Paint quality run 45388155816, job 138424433799, head 36bda3b2dd13be58adce98e5af368c2fbc9675b8: 14.021333s final; actual pointer 2489/2488 ms; audio -20.08/-20.02 LUFS, -4.83/-5.01 dB true peak; max caption CPS 15.03/17.63; full dispatch 24260 ms, repair 4185 ms, zero recapture and zero paid reservations. Local synthetic eSpeak NG, no listening verification. Sampled actual video frames show gradual drawing, larger canvas, legible accented Vietnamese text, but persistent idle desktop and simple screen-recording presentation. [Artifact](https://github.com/Irthn1311/AI-Video-Producer/actions/runs/45388155816/artifacts/14917741590).
+
+## Longer source-derived story pilot
+
+Retain the original TodoMVC baseline. New matrix variant authors a source-linked 36s Vietnamese story (create, complete, filter, clear completed), four independent fresh browser contexts, actual app assertions, local synthetic speech through timing selection, Remotion framed scene composition and final FFmpeg assembly. No provider calls. The operator/scripted test selection is not listening approval. Use the new opt-in edit.layout=framed with explicit stable visual design, chapter and static capture shots. Title, fitted actual source and caption lane occupy separate vertical regions. No zoom, extra overlay/inset, shot labels, speed-up or transition fade in this layout; older layouts are unchanged. This is not automatic design or true crossfade. Inspect real output to assess readability on smaller screens.
+
+The repair request extends a pause after the Active filter in scene 3, not a narration rewrite. Expected scope: recapture and render only the affected scene, rerun QA and final assembly; preserve every other scene artifact plus target voice and captions. Build rehearsal must be refreshed for changed capture. Test actual hashes and journaled dispatch. Preserve previous release and export both MP4s plus receipts. Full vs repair different configs, no matched percentage claim. All new results CI pending. No blind Agent, natural speech or MathMate parity acceptance.
+
+Independent run brief remains docs/independent-agent-brief.md; this is a scripted external demo, not an independent Agent session.

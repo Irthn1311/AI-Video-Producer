@@ -3,6 +3,7 @@ import path from 'node:path';
 import {available,avpDir,readJson,writeJson,sha,fileHash,loadEnv} from './utils.mjs';
 import {inspect,sourceFingerprint} from './inspect.mjs';
 import {analyzeProject} from './project-intelligence.mjs';
+import {matchProjectCapabilities} from './skill-discovery.mjs';
 import {gate,inputHashes} from './state.mjs';
 import {requireCoveragePlan,verificationMode} from './evidence.mjs';
 import {rehearsalPath} from './rehearsal.mjs';
@@ -53,7 +54,7 @@ function expectedStoryboard(config){
     ...(s.claims!==undefined?{claims:s.claims}:{})}));
 }
 function makeArtifacts(root,config){
-  const inventory=inspect(root,config),analysis=analyzeProject(root,config),sourceHash=inventory.contentFingerprint;
+  const inventory=inspect(root,config),analysis=analyzeProject(root,config),matching=matchProjectCapabilities(root,config,{analysis}),sourceHash=inventory.contentFingerprint;
   const source={configHash:sha(config),sourceFingerprint:sourceHash};
   const coverage=sourcePlan(root,'feature-coverage.json');
   const storyboard=sourcePlan(root,'storyboard.json');
@@ -83,8 +84,13 @@ function makeArtifacts(root,config){
     strategy:'BUNDLED_FIRST_NO_EXTERNAL_SKILL_INSTALL',
     projectCapabilityNeeds:analysis.capabilitySignals.map(s=>({
       id:s.id,neededCapabilities:s.neededCapabilities,sourceEvidence:s.evidence,
-      status:'DISCOVERED_NOT_MATCHED_OR_TESTED'
+      status:'SOURCE_HYPOTHESIS_NOT_RUNTIME_VERIFIED'
     })),
+    matchingMode:matching.mode,registryHash:matching.registryHash,
+    matchedRequirements:matching.requirements,
+    explicitRequired:matching.explicitRequired,
+    unresolved:matching.unresolved,
+    limitations:'Bundled implementations are not verified feature workflows. Guidance is not implementation; external repositories are untrusted research only.',
     requirements:config.scenes.map(s=>({
       sceneId:s.id,requiredActions:[...new Set(s.capture.actions.map(a=>a.type))],
       requestedAdapter:s.capture?.adapter||null,
@@ -92,7 +98,9 @@ function makeArtifacts(root,config){
         .filter(x=>!actionTypes.has(x)),
       limitations:'External skill/adapter search and authoring not yet automated'
     }))};
-  const toolchain={...toolchainSnapshot(config,root),...source};
+  const toolchain={...toolchainSnapshot(config,root),...source,
+    domainCapabilityLock:{registryHash:matching.registryHash,requirements:matching.requirements,
+      externalInstalls:[],externalSkillsExecuted:false}};
   const brief={schemaVersion:SCHEMA,...source,title:config.title,
     audience:config.creative?.audience??null,
     goal:config.creative?.goal??'Demonstrate observed application functionality',
@@ -116,6 +124,7 @@ function makeArtifacts(root,config){
     schemaVersion:SCHEMA,...source,
     kind:'BUILD_COMPILED_EXECUTION_CANDIDATE',
     projectIntelligenceHash:sha(analysis),
+    domainMatchingHash:sha(matching),
     constraint:'No scene runtime evidence is inherited from a rehearsal',
     artifactHashes:refs,
     coverageHash:fileHash(coverage),storyboardHash:fileHash(storyboard),
@@ -203,17 +212,27 @@ function checkArtifacts(root,config){
     if(production.projectConfigHash!==currentConfig)
       problems.push(issue('BUILD_PLAN_DRIFT','Compiled production plan is stale','Reprepare Build package'));
     const currentTools=toolchainSnapshot(config,root);
-    if(sha(artifacts['toolchain-lock'])!==sha({...currentTools,configHash:currentConfig,sourceFingerprint:currentSource}))
+    const currentMatching=matchProjectCapabilities(root,config);
+    if(sha(artifacts['toolchain-lock'])!==sha({...currentTools,configHash:currentConfig,sourceFingerprint:currentSource,
+      domainCapabilityLock:{registryHash:currentMatching.registryHash,requirements:currentMatching.requirements,
+        externalInstalls:[],externalSkillsExecuted:false}}))
       problems.push(issue('BUILD_TOOLCHAIN_DRIFT','Local toolchain availability/version changed','Reprepare and rehearse Build'));
     for(const item of currentTools.tools.filter(v=>v.required&&!v.available))
       problems.push(issue('BUILD_TOOL_MISSING',item.id+' is required but unavailable','Install/authorize '+item.id+' then rebuild'));
+    for(const req of currentMatching.requirements.filter(x=>x.explicitRequired&&x.status!=='BUNDLED_IMPLEMENTATION_AVAILABLE')){
+      problems.push(issue('BUILD_REQUIRED_CAPABILITY_MISSING',req.id+' is explicitly required but only '+req.status,
+        'Review/test a project-specific adapter, or revise capabilityRequirements; research candidates cannot authorize execution'));
+    }
+    const optionalGaps=currentMatching.unresolved.filter(x=>!x.required);
+    if(optionalGaps.length)
+      warnings.push('Unverified source-derived needs require review; do not promise these features in video until supported: '+optionalGaps.map(x=>x.id).join(', '));
     for(const capability of artifacts['capability-profile'].requirements){
       if(capability.unresolvedActions.length)
         problems.push(issue('BUILD_UNKNOWN_ACTION',capability.sceneId+': '+capability.unresolvedActions.join(', '),'Provide a reviewed, sandboxed project adapter in future adapter flow'));
       if(capability.requestedAdapter)
         problems.push(issue('BUILD_ADAPTER_UNSUPPORTED',capability.sceneId+' requires custom adapter not yet verified','Implement and test adapter before Production'));
     }
-    warnings.push('Built-in tool selection only. Dynamic Internet skill discovery is not implemented.');
+    warnings.push('Bundled capability matching only; optional external GitHub search is read-only research, never auto-installed or trusted.');
     if(!artifacts['creative-brief'].audience)
       warnings.push('Audience was not supplied: creative direction should be reviewed before freezing.');
   }

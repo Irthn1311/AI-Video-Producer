@@ -9,6 +9,7 @@ import {gate,inputHashes} from './state.mjs';
 import {requireCoveragePlan,verificationMode} from './evidence.mjs';
 import {rehearsalPath} from './rehearsal.mjs';
 import {makeCreativeBrief,creativeStatus} from './creative-director.mjs';
+import {storyboardGate} from './agent-storyboard.mjs';
 
 const SCHEMA=1;
 const files=['project-profile','feature-inventory','capability-profile','toolchain-lock',
@@ -116,7 +117,8 @@ function makeArtifacts(root,config){
   const board=readJson(storyboard);
   const boardSnapshot={schemaVersion:SCHEMA,...source,
     sourceFile:'.avp/planning/storyboard.json',sourceHash:fileHash(storyboard),
-    scenes:board.scenes};
+    scenes:board.scenes,
+    ...(config.creative?.storyboard?{agentStoryboard:config.creative.storyboard}:{})};
   const artifacts={
     'project-profile':profile,'feature-inventory':featureInventory,
     'capability-profile':capabilityProfile,'toolchain-lock':toolchain,
@@ -136,6 +138,7 @@ function makeArtifacts(root,config){
     render:config.render,language:config.language,review:config.review,
     maxEstimatedUsd:config.budget?.maxEstimatedUsd??null,
     dependencies:config.production?.sceneDependencies||{},
+    ...(config.creative?.storyboard?{agentStoryboardHash:sha(config.creative.storyboard)}:{}),
     scenes:config.scenes.map(s=>({
       id:s.id,title:s.title,durationSec:s.durationSec,featureIds:s.featureIds||[],
       shotIds:(s.edit?.shots?.length?s.edit.shots:[{source:'capture'}]).map((_,i)=>s.id+'-shot-'+String(i+1).padStart(2,'0')),
@@ -341,7 +344,7 @@ export function checkBuild(root,config,state,{forFreeze=false}={}){
   const a=checkArtifacts(root,config);
   const rehearsal=verifyRehearsals(root,config);
   const planning=checkPlanning(root,config,state);
-  const problems=[...a.problems,...rehearsal.problems,...planning.problems];
+  const problems=[...a.problems,...rehearsal.problems,...planning.problems,...storyboardGate(config,a.sourceHash)];
   const reviews=[...planning.review];
   const creative=creativeStatus(root,config,{sourceHash:a.sourceHash});
   if(creative.status==='BLOCKED')problems.push(...creative.issues);
@@ -387,7 +390,7 @@ export function freezeBuild(root,config,state){
     sceneCount:config.scenes.length,buildLock:file(root,'build-lock')};
 }
 export function requiresBuild(root,config){
-  return config.creative?.director!==undefined||config.workflow?.requireBuild===true||exists(file(root,'build-state'));
+  return config.creative?.storyboard!==undefined||config.creative?.director!==undefined||config.workflow?.requireBuild===true||exists(file(root,'build-state'));
 }
 /** Legacy projects remain compatible until they opt into Build or are initialized with it. */
 export function requireBuildGate(root,config,state){

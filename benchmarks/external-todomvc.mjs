@@ -8,11 +8,12 @@ import http from 'node:http';
 import {execFile,execFileSync} from 'node:child_process';
 import {promisify} from 'node:util';
 import {readJson,writeJson,fileHash,sceneDir} from '../src/utils.mjs';
+import {proposePauseAdvance,applyPauseCandidate} from '../src/pause-advance.mjs';
 const exec=promisify(execFile),repo=path.resolve(import.meta.dirname,'..');
 const pin='ff43b02e59dfa604386bb382034b2cd07c2bcd8a';
 if(process.env.AVP_EXTERNAL_ISOLATED!=='1')throw Error('Use reviewed isolated external pilot workflow');
-const mode=process.argv[4]||'baseline';if(!['baseline','story','focus'].includes(mode))throw Error('Invalid TodoMVC pilot mode');
-const focus=mode==='focus',story=mode!=='baseline';
+const mode=process.argv[4]||'baseline';if(!['baseline','story','focus','sync-repair'].includes(mode))throw Error('Invalid TodoMVC pilot mode');
+const syncRepair=mode==='sync-repair',focus=mode==='focus'||syncRepair,story=mode!=='baseline';
 const upstream=path.resolve(process.argv[2]),destination=path.resolve(process.argv[3]);
 assert.equal(execFileSync('git',['-C',upstream,'rev-parse','HEAD'],{encoding:'utf8'}).trim(),pin);
 const app=path.join(upstream,'examples','react'),root=fs.mkdtempSync(path.join(os.tmpdir(),'avp-todomvc-'));
@@ -114,6 +115,9 @@ try{
   assert.equal((await dispatch('render')).next.status,'COMPLETE');
   const full=await cli('benchmark','record','--label','todomvc-full','--kind','full','--scope','external','--confirm');
   assert.equal(full.reservedCallsDelta,0);
+  const readAlignment=id=>readJson(path.join(sceneDir(root,id),'qa-report.json')).quality.cueAlignment;
+  const beforeTiming=syncRepair?Object.fromEntries(scenes.map(s=>[s.id,readAlignment(s.id)])):null;
+  const timingRepairs=[];
   const prior=await cli('release','archive','--confirm'),targetId=story?'filter':'complete';
   const preserveIds=scenes.filter(s=>s.id!==targetId).map(s=>s.id),preserved=Object.fromEntries(preserveIds.map(id=>[id,Object.fromEntries(['capture.mp4','preview.mp4','captions.srt',...(story?['voice.wav']:[])].map(n=>[n,fileHash(path.join(sceneDir(root,id),n))]))]));
   const capture=fileHash(path.join(sceneDir(root,targetId),'capture.mp4')),targetVoice=story?fileHash(path.join(sceneDir(root,targetId),'voice.wav')):null,targetCaptions=fileHash(path.join(sceneDir(root,targetId),'captions.srt'));
@@ -121,14 +125,21 @@ try{
   revision.baseConfigHash=newContext.baseConfigHash;revision.sourceFingerprint=newContext.sourceFingerprint;
   if(story){
     const target=revision.scenes.find(s=>s.scene.id===targetId).scene;
-    const i=target.capture.actions.findIndex(a=>a.evidenceId==='active-task');
-    assert.equal(target.capture.actions[i+1].type,'pause');target.capture.actions[i+1].ms=1400;
+    if(syncRepair){
+      const candidate=proposePauseAdvance(target.capture.actions,beforeTiming.filter);
+      assert.ok(['CANDIDATE','PARTIAL_CANDIDATE'].includes(candidate.status),JSON.stringify(candidate));
+      target.capture.actions=applyPauseCandidate(target.capture.actions,candidate);
+      timingRepairs.push({sceneId:targetId,candidate,before:beforeTiming.filter});
+    }else{
+      const i=target.capture.actions.findIndex(a=>a.evidenceId==='active-task');
+      assert.equal(target.capture.actions[i+1].type,'pause');target.capture.actions[i+1].ms=1400;
+    }
   }else{
     revision.scenes[1].scene.narration='Complete the task. Show completed tasks.';
     revision.scenes[1].scene.claims[0].text=revision.scenes[1].scene.narration;
   }
   writeJson(proposalFile,revision);
-  writeJson(path.join(root,'.avp','repair','request.json'),{schemaVersion:1,baseConfigHash:newContext.baseConfigHash,sceneId:targetId,cause:story?'capture-timing':'narration',description:story?'Hold the Active filter longer so the viewer can read it':'Clarify the completed-task filter in the caption',rationale:story?'Recapture only the filter scene; keep the same narration and script':'Existing footage already demonstrates the result'});
+  writeJson(path.join(root,'.avp','repair','request.json'),{schemaVersion:1,baseConfigHash:newContext.baseConfigHash,sceneId:targetId,cause:story?'capture-timing':'narration',description:syncRepair?'Advance filter evidence by reducing explicit setup pauses':story?'Hold the Active filter longer so the viewer can read it':'Clarify the completed-task filter in the caption',rationale:story?'Recapture only the filter scene; keep the same narration and script':'Existing footage already demonstrates the result'});
   const plan=await cli('repair','plan');assert.equal(plan.captureScope,story?'FULL_TARGET_SCENE':'NONE');assert.equal(plan.nodes.find(x=>x.kind==='captions').action,story?'PRESERVE':'REBUILD');if(story)assert.equal(plan.nodes.find(x=>x.kind==='voice').action,'PRESERVE');
   const applied=await cli('repair','apply','--hash',plan.planHash,'--confirm');assert.equal(applied.releaseId,prior.releaseId);
   await cli('build','prepare','--force');if(story){const rehearsed=await cli('build','rehearse','--scene',targetId,'--allow-actions');assert.equal(rehearsed.status,'PASS');assert.equal((await cli('timing','check')).status,'PASS');}
@@ -147,12 +158,44 @@ try{
     assert.ok(Math.abs(repair.finalDurationSec-audit.assembly.durationSec)<.12);
     assert.equal(repair.scenes.filter(s=>s.artifactStatus.preview==='EXECUTED').length,1);
   }
+  let secondRepair=null;
+  if(syncRepair){
+    timingRepairs[0].after=readAlignment('filter');
+    timingRepairs[0].benchmarkId=repair.id;
+    stage='cleanup-timing-repair';
+    const current=readJson(path.join(root,'project.json')),context=await cli('storyboard','context'),next=structuredClone(revision);
+    next.baseConfigHash=context.baseConfigHash;next.sourceFingerprint=context.sourceFingerprint;
+    const target=next.scenes.find(x=>x.scene.id==='cleanup').scene;
+    const before=readAlignment('cleanup'),candidate=proposePauseAdvance(target.capture.actions,before);
+    // A within-window result needs no repair; do not fabricate a new revision.
+    if(candidate.status==='NO_ADVANCE_REQUIRED')timingRepairs.push({sceneId:'cleanup',candidate,before,after:before});
+    else{
+      assert.ok(['CANDIDATE','PARTIAL_CANDIDATE'].includes(candidate.status),JSON.stringify(candidate));
+      const media=['capture.mp4','voice.wav','captions.srt','preview.mp4'];
+      const keep=Object.fromEntries(current.scenes.filter(s=>s.id!=='cleanup').map(s=>[s.id,Object.fromEntries(media.map(n=>[n,fileHash(path.join(sceneDir(root,s.id),n))]))]));
+      const keepTarget=Object.fromEntries(['voice.wav','captions.srt'].map(n=>[n,fileHash(path.join(sceneDir(root,'cleanup'),n))]));
+      target.capture.actions=applyPauseCandidate(target.capture.actions,candidate);
+      writeJson(proposalFile,next);
+      writeJson(path.join(root,'.avp','repair','request.json'),{schemaVersion:1,baseConfigHash:context.baseConfigHash,sceneId:'cleanup',cause:'capture-timing',description:'Advance cleanup evidence by shortening setup pauses',rationale:'Keep narration, captions and all unrelated media unchanged'});
+      const p=await cli('repair','plan');assert.equal(p.captureScope,'FULL_TARGET_SCENE');
+      for(const kind of ['voice','captions'])assert.equal(p.nodes.find(x=>x.kind===kind).action,'PRESERVE');
+      assert.equal((await cli('repair','apply','--hash',p.planHash,'--confirm')).status,'APPLIED_REQUIRES_BUILD');
+      await cli('build','prepare','--force');assert.equal((await cli('build','rehearse','--scene','cleanup','--allow-actions')).status,'PASS');assert.equal((await cli('timing','check')).status,'PASS');
+      assert.equal((await cli('build','freeze','--confirm')).status,'READY');
+      await dispatch('capture','--allow-actions');await dispatch('preview');await dispatch('qa');assert.equal((await dispatch('render')).next.status,'COMPLETE');
+      for(const [id,parts] of Object.entries(keep))for(const [name,hash] of Object.entries(parts))assert.equal(fileHash(path.join(sceneDir(root,id),name)),hash);
+      for(const [name,hash] of Object.entries(keepTarget))assert.equal(fileHash(path.join(sceneDir(root,'cleanup'),name)),hash);
+      secondRepair=await cli('benchmark','record','--label','todomvc-cleanup-repair','--kind','repair','--scope','external','--confirm');
+      assert.equal(secondRepair.reservedCallsDelta,0);assert.equal(secondRepair.scenes.filter(s=>s.artifactStatus.capture==='EXECUTED').length,1);
+      timingRepairs.push({sceneId:'cleanup',candidate,before,after:readAlignment('cleanup'),benchmarkId:secondRepair.id});
+    }
+  }
   stage='export';fs.mkdirSync(destination,{recursive:true});
   for(const name of ['final.mp4','final.srt','final-qa.json','final-report.json'])copyRegular(path.join(root,'.avp','output',name),path.join(destination,name));
   copyRegular(path.join(root,'.avp','releases',prior.releaseId,'final.mp4'),path.join(destination,'previous.mp4'));
   const diagnostics=focus?scenes.map(s=>{const q=readJson(path.join(sceneDir(root,s.id),'qa-report.json')).quality;assert.ok(q.framing?.detail);assert.ok(q.cueAlignment?.results?.length);return {sceneId:s.id,framing:q.framing,cueAlignment:q.cueAlignment};}):[];
   if(focus)assert.equal(diagnostics.flatMap(s=>s.cueAlignment.results).length,5);
-  const result={status:'TECHNICAL_PASS',mode,selected,diagnostics,scope:'SOURCE_DERIVED_EXTERNAL_SCRIPTED_PILOT_NOT_BLIND',sourceRevision:pin,full,repair,comparison,semantic:'NOT_INDEPENDENTLY_EVALUATED',voice:story?'ESPEAK_NG_LOCAL_SYNTHETIC_VI_SGN_NOT_LISTENING_VERIFIED':'DISABLED'};
+  const result={status:'TECHNICAL_PASS',mode,selected,diagnostics,...(syncRepair?{beforeTiming,timingRepairs,secondRepair,timingAcceptance:diagnostics.every(s=>s.cueAlignment.outside===0&&s.cueAlignment.unresolved===0)?'ALL_DECLARED_CUES_WITHIN_WINDOW':'REMAINING_TIMING_ISSUES'}:{}),scope:'SOURCE_DERIVED_EXTERNAL_SCRIPTED_PILOT_NOT_BLIND',sourceRevision:pin,full,repair,comparison,semantic:'NOT_INDEPENDENTLY_EVALUATED',voice:story?'ESPEAK_NG_LOCAL_SYNTHETIC_VI_SGN_NOT_LISTENING_VERIFIED':'DISABLED'};
   writeJson(path.join(destination,'pilot-report.json'),result);console.log('AVP_EXTERNAL_PILOT '+JSON.stringify(result));
 }catch(e){console.error('AVP_EXTERNAL_BLOCKER '+JSON.stringify({stage,message:String(e.message).slice(0,1500)}));throw e;}
 finally{if(server.listening)await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});}

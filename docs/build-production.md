@@ -15,6 +15,8 @@ Existing project configs without `workflow.requireBuild` continue with their old
 node bin/avp.mjs init ./my-video
 # Edit project.json: sourcePath, appUrl, feature IDs, claims, storyboard and scenes.
 
+node bin/avp.mjs analyze --project ./my-video
+# Inspect source-derived stack/routes/capability hypotheses; these are not verified features.
 node bin/avp.mjs plan --project ./my-video
 # Inspect .avp/planning/feature-coverage.json and storyboard.json
 node bin/avp.mjs approve --stage coverage --project ./my-video
@@ -50,8 +52,8 @@ node bin/avp.mjs run --project ./my-video
 The directory `.avp/build/` contains:
 
 ```text
-project-profile.json       # static source inventory ONLY, no runtime claims
-feature-inventory.json     # candidate features, never silently VERIFIED
+project-profile.json       # bounded source stack/routes/capability signals; NO runtime claims
+feature-inventory.json     # configured feature candidates + source route hypotheses, UNVERIFIED
 capability-profile.json    # built-in capabilities and unresolved adapters
 toolchain-lock.json        # actual local bundled tool availability; no Internet install
 creative-brief.json        # draft creative settings from explicit project config
@@ -69,7 +71,7 @@ Build checks current source/config hashes, storyboard/coverage approvals, the co
 
 ## Limits that remain on the MASTER checklist
 
-- Static `inspect` is **not** the proposed autonomous Repository Intelligence agent; it does not discover app business logic or dynamically find third-party skills.
+- `analyze` adds bounded, static stack/routes/capability signals but is **not** autonomous Repository Intelligence: no live feature validation, business logic investigation or third-party skill search. See [Project Intelligence](project-intelligence.md).
 - Build currently supports **built-in declarative** capture actions. A custom adapter requirement causes `BLOCKED`; it is not silently executed. Reviewed sandboxed adapter runtime comes in A3.
 - Creative brief is derived from project settings and reviewed during explicit freeze; no proactive interview/Creative Director is implemented yet.
 - The first contract stores basic shot IDs but no proven shot-isolation/dependency DAG. It does **not** enable shot-level repair.

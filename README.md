@@ -55,6 +55,10 @@ flowchart LR
 
 The first module is **`software-demo`**. The architecture leaves room for future explainer and marketing-video modules. AVP v0.1 is an extensible toolkit, **not a hosted or fully autonomous video service**.
 
+## Project Intelligence — source-aware BUILD preparation
+
+`avp analyze` now inspects an unfamiliar app's **static source** for framework/dependency signals, startup candidates, route/API declarations and possible domain needs (canvas, pairing, WebSocket, charts, maps, etc.). These findings are included in the Build Package with file-based provenance, without executing the app or calling an LLM. They are **unverified clues**, not proof that a feature works. [Project Intelligence guide](docs/project-intelligence.md).
+
 ## BUILD → PRODUCTION (verified preparation)
 
 Newly initialized projects require an explicit pre-production BUILD phase. `avp build prepare` compiles a versioned Build Package, `avp build rehearse --scene ID --allow-actions` tests real browser interactions **without recording**, and `avp build freeze --confirm` freezes the reviewed Production Plan and gates capture/render. Missing tools, broken assertions or source/plan drift return `BLOCKED`. Existing legacy projects remain compatible until they opt in. This **does not** yet perform external skill discovery or autonomous creative direction. [Two-phase guide](docs/build-production.md).

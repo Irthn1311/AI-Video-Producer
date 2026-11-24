@@ -17,6 +17,10 @@
 - Local explicit scene snapshots and restore are implemented; automatic capture-stage checkpoints, retention pruning and fully transactional rollback remain open. Capture hashes include source content, app URL and viewport to detect changes inside the configured source scope; runtime/browser changes outside that scope still require explicit review. Scene locks protect the current approved artifacts.
 - Automatic agent self-healing and robust true-cost accounting are future milestones.
 
+## F-02 Project Intelligence — PARTIAL
+
+`src/project-intelligence.mjs` provides bounded local source inspection for framework/entrypoint candidates, route/API declarations, and domain capability signals; `avp analyze` exports a provenance-backed report and `build prepare` includes it in canonical Build artifacts. It does **not** run an autonomous agent, test feature behavior, execute app scripts, search skills online or rank a full business-domain feature inventory. Those capabilities are still open under A1/A2/A3.
+
 ## First two-phase BUILD/PRODUCTION contract (A6 — PARTIAL)
 
 New `avp init` projects require `build prepare`, real Playwright `build rehearse`, planning review, and `build freeze` before starting media production; existing unopted legacy configs continue to work. Artifacts/lock files are hashed and a structured readiness report distinguishes `BLOCKED`, `REVIEW_REQUIRED`, `READY`. The same action executor runs in rehearsal and capture, but rehearsal proof is **not** copied to Production evidence. This is a tested foundational handoff, not full A6 acceptance on unknown repositories, dynamic capability discovery, agent orchestration or shot-level repair.

@@ -36,6 +36,10 @@
 
 ## A1. Project Intake & Repository Intelligence — P0
 
+> **F-02 source discovery (PARTIAL; chưa tick Done):** `avp analyze` đã nhận diện framework, entrypoint candidates, routes/API và một số nhu cầu tool chuyên biệt từ mã nguồn qua scan giới hạn; phát sinh `.avp/intelligence/project-analysis.json` có path/line evidence, và đưa gợi ý chưa kiểm chứng vào `project-profile`, `feature-inventory`, `capability-profile`. Chưa có agent tự hiểu nghiệp vụ, xác minh runtime, quản lý launch/auth/dataset hoặc thử trên repo lạ ngoài fixtures. Để A1 ở `[ ]` cho tới khi các tiêu chí đầy đủ đạt. Xem `docs/project-intelligence.md` và PR F-02.
+
+
+
 - [ ] `A1-01` Nhận input repo/path, revision/branch, mục tiêu video, đối tượng xem, giới hạn dữ liệu, ngôn ngữ, thời lượng, nền tảng; không suy luận những thông tin bắt buộc chưa có.
 - [ ] `A1-02` Tự phát hiện stack/framework, monorepo/services, entrypoints, cách chạy ứng dụng, ports, dependencies, auth, environment, test/deploy workflow.
 - [ ] `A1-03` Phân tích tính năng từ source, docs, route, UI, API, tests và runtime; phân biệt **có code / có thể chạy / đã quan sát thành công**.

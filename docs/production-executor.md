@@ -1,0 +1,18 @@
+# Resumable Production executor (F-05a)
+
+The new CLI is a one-step execution-aware dispatcher for the existing frozen Build workflow. It is not an LLM or a replacement for agent reasoning. The agent reads the next step, performs the necessary decision/repair/review, then invokes an explicit step. Legacy commands remain available.
+
+```sh
+avp production next
+avp production step --allow-actions
+avp production step --allow-paid-api
+avp production step
+```
+
+Both next and step validate current Build, including the frozen plan hash. A revision is the hash of build-lock.json. The executor selects capture, voice, captions, preview, technical QA, then final rendering, using existing stale-part and approval validators. The next operation is an allowlisted bundled capability, not an arbitrary command from a proposal. No new app actions run without explicit --allow-actions. Paid TTS requires explicit --allow-paid-api and the existing persisted budget; selected Build audio uses no paid API. A new step performs only one operation. Review mode stops before moving beyond an unapproved scene and before final approval; the executor never approves media. Autonomous mode still requires technical QA and does not imply semantic review.
+
+Each revision has a local journal under .avp/production, with run ID, capability, scene, attempt, RUNNING/EXECUTED/FAILED events and elapsed time. EXECUTED is not semantic verification; QA and approval are distinct. Next derives from actual state/hashes, not journal claims. An interrupted or failed step blocks until an explicit --retry-failed decision. If an artifact was already written and the next step changed, explicit reconciliation records that fact without replaying the previous action. Retries are bounded by budget.maxRetryPerScene (0–20); no automatic retry or indefinite loop. Errors are recorded as generic codes, not raw app or provider data; consult existing local reports for diagnosis. A new freeze creates a distinct journal, preserving prior history.
+
+Only one production step can run concurrently via the exclusive local executor lock. If a local process died, inspect its owner and use `avp production recover --confirm`; a live or foreign-host PID cannot be recovered by this command. Do not run legacy mutation commands, modify project inputs, or use multiple hosts while an executor owns the workspace. This lock does not serialize legacy CLI or direct filesystem writes; cross-process global workspace locking and atomic paid-budget reservation are follow-up work. Browser/runtime timeouts remain those of the existing tools; no global deadline or automatic process termination is implemented.
+
+This slice does not launch/reset unknown apps, perform cross-scene state orchestration, run external skills, automatically repair errors, or independently cache shots. Technical success cannot certify the creative quality or all visible claims. Use existing explicit Build, evidence and review gates.

@@ -168,7 +168,10 @@ export function analyzeProject(root,config,{maxFiles=maxSourceFiles,maxBytes=max
       for(const item of collectRoutes(text,f.path))routes.push(item);
       for(const signal of signals){
         signal.pattern.lastIndex=0;
-        const matches=[...text.matchAll(signal.pattern)].slice(0,signalLimit);
+        // Stop after a handful of observations instead of expanding every match
+        // in a large untrusted source file into memory.
+        const matches=[];let match;
+        while(matches.length<signalLimit&&(match=signal.pattern.exec(text)))matches.push(match);
         if(!matches.length)continue;
         const ev=capabilityEvidence.get(signal.id)||[];
         for(const m of matches){

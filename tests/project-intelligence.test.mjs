@@ -19,6 +19,7 @@ function fixture(files){
     fs.mkdirSync(path.dirname(target),{recursive:true});
     fs.writeFileSync(target,body);
   }
+  writeJson(path.join(root,'project.json'),config);
   return {root,config};
 }
 const cleanup=f=>fs.rmSync(f.root,{recursive:true,force:true});

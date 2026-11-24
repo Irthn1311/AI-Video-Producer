@@ -12,6 +12,7 @@ import {verificationMode,verifySceneClaims} from './evidence.mjs';
 import {captureEvidencePassed} from './capture-assertions.mjs';
 import {managedApp} from './app-runtime.mjs';
 import {artifactInventory} from './telemetry.mjs';
+import {semanticPolicy,semanticStatus} from './semantic-review.mjs';
 
 const dir=root=>path.join(avpDir(root),'production');
 const mutex=root=>path.join(dir(root),'executor.lock');
@@ -55,8 +56,12 @@ function nextMedia(root,config,state){
     if(stale.captions)return step('captions',s.id,'bundled-caption-timing');
     if(stale.preview)return step('preview',s.id,s.edit?'remotion-render':'ffmpeg-render');
     if(!ss.qa)return step('qa',s.id,'ffprobe-qa');
-    try{validateSceneQa(root,config,s,state);}
+    let qa;try{qa=validateSceneQa(root,config,s,state);}
     catch{return stop('BLOCKED','SCENE_QA_INVALID','Inspect current QA/evidence and repair the affected inputs; do not repeat blindly',{sceneId:s.id});}
+    if(semanticPolicy(config)){
+      const semantic=semanticStatus(root,config,s,qa);
+      if(semantic.status!=='DECLARED_PASS')return stop('REVIEW_REQUIRED','SEMANTIC_REVIEW','Inspect actual preview/audio and record current semantic review; do not equate technical QA with semantic pass',{sceneId:s.id,semantic});
+    }
     // Match the actual render gate: review mode requires approved scenes,
     // even if the older eachScene flag is false.
     if(config.review.mode==='review')return stop('REVIEW_REQUIRED','SCENE_REVIEW','Inspect preview, claims and QA; run avp approve --stage scene --scene '+s.id,{sceneId:s.id});

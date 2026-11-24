@@ -8,6 +8,10 @@
 - Portable Node CLI, config validation, project initialization, inspection, planning artifacts, review gates, scene capture/import, optional Gemini TTS, estimated SRT, FFmpeg preview and final concat, optional Remotion adapter.
 - JSON state with content fingerprints, artifact hashes, approval checks bound to current planning/QA evidence, scene locks, estimated API-call reservations, smoke tests, CI, bilingual docs, and agent skill playbooks.
 
+## Integrated preview foundations (F-05 to F-08/F-09)
+
+See [workflow](workflow.md), [telemetry](telemetry.md), [production quality](production-quality.md), [targeted repair](targeted-repair.md) and [benchmark protocol](benchmark.md). The deterministic executor, scoped repair, local release archive and optional declared semantic review gate are foundations, not full autonomous agent or stable release acceptance. The canonical checklist separates F-08 decision/cost policies from F-09 external benchmark/release; known-fixture CI is not independent acceptance.
+
 ## Important limitations
 
 - `repo-intelligence` is a human/agent procedure; Graphify/Serena/Aider are *optional external* tools, not automatically installed or orchestrated.

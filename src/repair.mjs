@@ -76,13 +76,13 @@ export function applyRepair(root,{hash,confirm=false}={}){
     const scene=config.scenes.find(s=>s.id===plan.sceneId);
     // Archive approved output before invalidation; no false claim of a current release.
     let release=null,valid=false;try{validateFinalOutput(root,config,state);valid=true;}catch{}
-    if(valid)release=archiveRelease(root,config,state,{confirm:true});
+    if(valid&&(config.review.mode!=='review'||state.reviews?.final))release=archiveRelease(root,config,state,{confirm:true});
     else if(state.reviews?.final)throw Error('Prior final approval exists but output is invalid; inspect or archive externally before repair');
     const backup=snapshotScene(root,config,scene,state,{label:'pre-repair '+plan.planHash.slice(0,12)});
     const journal=path.join(folder(root),plan.planHash+'.json');
     writeJson(journal,{schemaVersion:1,status:'CHECKPOINTED',plan,backup,releaseId:release?.releaseId||null,priorConfig:config});
     // Clear target approval before changing canonical config. If interrupted, old or new config still needs review.
-    const ss=state.scenes[scene.id];ss.locked=false;ss.approved=false;delete ss.qa;delete ss.approvedAt;delete ss.approvedPreviewHash;delete ss.approvedQaHash;
+    const ss=state.scenes[scene.id];ss.locked=false;ss.approved=false;delete ss.approvedSemanticHash;delete ss.qa;delete ss.approvedAt;delete ss.approvedPreviewHash;delete ss.approvedQaHash;
     invalidateOutput(state);saveState(root,state);
     writeJson(path.join(root,'project.json'),next);
     writeJson(journal,{schemaVersion:1,status:'APPLIED_REQUIRES_BUILD',plan,backup,releaseId:release?.releaseId||null,priorConfig:config});

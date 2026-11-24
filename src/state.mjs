@@ -12,6 +12,7 @@ import {ExecutionError} from './execution-errors.mjs';
 import {appRuntimeFingerprint} from './app-runtime.mjs';
 import {qualityPolicy} from './quality-policy.mjs';
 import {validateQualityScene,validateFinalAudit} from './production-quality.mjs';
+import {requireSemanticReview,semanticPolicy} from './semantic-review.mjs';
 
 const stamp=()=>new Date().toISOString();
 const planPath=(root,stage)=>path.join(avpDir(root),'planning',stage==='coverage'?'feature-coverage.json':'storyboard.json');
@@ -111,7 +112,9 @@ export function validateSceneQa(root,config,scene,state){
 export function sceneApprovalValid(root,config,scene,state){
   const ss=sceneState(state,scene.id);
   if(!ss.approved||!ss.locked)throw Error(`Scene ${scene.id} awaits review approval`);
-  validateSceneQa(root,config,scene,state);
+  const qa=validateSceneQa(root,config,scene,state);
+  const semantic=requireSemanticReview(root,config,scene,qa);
+  if(semantic&&ss.approvedSemanticHash!==semantic.receiptHash)throw Error('Scene semantic review changed since approval');
   if(ss.approvedPreviewHash!==ss.artifacts.preview.hash||ss.approvedQaHash!==ss.qa.reportHash)throw Error(`Scene ${scene.id} approval is stale`);
   return true;
 }
@@ -125,7 +128,9 @@ export function validateFinalOutput(root,config,state){
   if(report.pass!==true||!Object.values(report.checks||{}).every(Boolean)||report.outputHash!==fileHash(file)||state.output.hash!==report.outputHash||state.output.qaHash!==fileHash(qa)||state.output.inputHash!==finalInputHash(config,state))throw Error('Final output or QA evidence is stale; render again');
   validateFinalAudit(root,config,report);
   requireCoveragePlan(root,config);
-  for(const scene of config.scenes){validateSceneQa(root,config,scene,state);if(config.review?.mode==='review')sceneApprovalValid(root,config,scene,state);}
+  for(const scene of config.scenes){const qa=validateSceneQa(root,config,scene,state);const semantic=requireSemanticReview(root,config,scene,qa);
+    if(semantic&&report.semanticReceipts?.[scene.id]!==semantic.receiptHash)throw Error('Final output semantic review receipt changed');
+    if(config.review?.mode==='review')sceneApprovalValid(root,config,scene,state);}
   return report;
 }
 export function approve(root,state,config,stage,id){
@@ -133,8 +138,8 @@ export function approve(root,state,config,stage,id){
     if(!id)throw Error('Use --scene ID');
     const scene=config.scenes.find(s=>s.id===id);if(!scene)throw Error('Unknown scene');
     gate(state,config,'coverage',root);gate(state,config,'storyboard',root);
-    validateSceneQa(root,config,scene,state);
-    const ss=sceneState(state,id);ss.approved=true;ss.locked=true;ss.approvedAt=stamp();ss.approvedPreviewHash=ss.artifacts.preview.hash;ss.approvedQaHash=ss.qa.reportHash;
+    const qa=validateSceneQa(root,config,scene,state),semantic=requireSemanticReview(root,config,scene,qa);
+    const ss=sceneState(state,id);if(semantic)ss.approvedSemanticHash=semantic.receiptHash;ss.approved=true;ss.locked=true;ss.approvedAt=stamp();ss.approvedPreviewHash=ss.artifacts.preview.hash;ss.approvedQaHash=ss.qa.reportHash;
     invalidateOutput(state);
   }else if(stage==='coverage'||stage==='storyboard'){
     if(stage==='storyboard')gate(state,config,'coverage',root);

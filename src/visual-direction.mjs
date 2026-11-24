@@ -17,8 +17,10 @@ export function visualStatus(config){
       if(policy.consistentTheme!==false&&themeHash!==h)throw Error('Theme differs from first scene');
       const ids=shotIds(s),fps=config.render?.fps||30;
       const target=Math.max(1,Math.round(s.durationSec*fps));
-      if(s.edit.shots.reduce((n,x)=>n+Math.max(1,Math.round(x.durationSec*fps)),0)>target+1)
+      if(s.edit.shots.reduce((n,x)=>n+Math.max(1,Math.round(x.durationSec*fps)),0)>target)
         throw Error('Shot slots exceed scene frame budget');
+      if(s.edit.shots.some(x=>x.transitionIn&&Math.max(1,Math.round(x.transitionIn.durationSec*fps))>=Math.max(1,Math.round(x.durationSec*fps))))
+        throw Error('Fade would obscure entire shot');
       scenes.push({id:s.id,themeHash:h,shotIds:ids,plannedSec:s.durationSec,
         assets:editAssetNames(s.edit),shots:s.edit.shots.map((shot,i)=>({id:ids[i],specHash:sha(shot),
           source:shot.source||'capture',purpose:shot.purpose,editReason:shot.editReason||null})),

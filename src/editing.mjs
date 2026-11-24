@@ -25,7 +25,7 @@ function validateTheme(theme){
 }
 export function shotIds(scene){
   const defs=scene.edit?.shots||[{source:'capture'}];
-  return defs.map((s,i)=>s.id||scene.id+'-shot-'+String(i+1).padStart(2,'0'));
+  return defs.map((s,i)=>scene.edit?.design?s.id:scene.id+'-shot-'+String(i+1).padStart(2,'0'));
 }
 function validateDesign(scene,edit){
   const d=edit.design;
@@ -151,7 +151,7 @@ export function compileSceneEdit(scene,{sources,fps,voiceDurationSec=0,captions=
   const defs=edit.shots||[{source:'capture',durationSec:scene.durationSec}];
   const slotFrames=defs.map(s=>frames(s.durationSec,fps));
   const used=slotFrames.reduce((a,b)=>a+b,0);
-  if(used>targetFrames+1)throw Error('Scene shots exceed output frame count');
+  if(used>targetFrames+(edit.design?0:1))throw Error('Scene shots exceed output frame count');
   const shots=[];let cursor=0;
   const ids=shotIds(scene);
   for(let i=0;i<defs.length;i++){
@@ -160,6 +160,7 @@ export function compileSceneEdit(scene,{sources,fps,voiceDurationSec=0,captions=
     const tail=i===defs.length-1?Math.max(0,targetFrames-used):0;
     if(edit.design&&s.trimEndSec!==undefined&&s.trimEndSec>source.durationSec+1/fps)throw Error('Designed shot trim exceeds actual source: '+ids[i]);
     const media=compileMedia(s,source,slotFrames[i],fps,tail);
+    if(edit.design&&s.transitionIn&&frames(s.transitionIn.durationSec,fps)>=slotFrames[i])throw Error('Fade would obscure entire shot: '+ids[i]);
     shots.push({...media,id:ids[i],fromFrame:cursor,zoom:s.zoom??1,focus:s.focus??{x:0.5,y:0.5},label:s.label||null,
       camera:s.camera||'pulse',transitionInFrames:s.transitionIn?frames(s.transitionIn.durationSec,fps):0,
       purpose:s.purpose||null,editReason:s.editReason||null});

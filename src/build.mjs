@@ -77,7 +77,7 @@ function makeArtifacts(root,config){
         .filter(x=>!actionTypes.has(x)),
       limitations:'External skill/adapter search and authoring not yet automated'
     }))};
-  const toolchain=toolchainSnapshot(config,root);
+  const toolchain={...toolchainSnapshot(config,root),...source};
   const brief={schemaVersion:SCHEMA,...source,title:config.title,
     audience:config.creative?.audience??null,
     goal:config.creative?.goal??'Demonstrate observed application functionality',
@@ -179,7 +179,7 @@ function checkArtifacts(root,config){
     if(production.projectConfigHash!==currentConfig)
       problems.push(issue('BUILD_PLAN_DRIFT','Compiled production plan is stale','Reprepare Build package'));
     const currentTools=toolchainSnapshot(config,root);
-    if(sha(artifacts['toolchain-lock'])!==sha(currentTools))
+    if(sha(artifacts['toolchain-lock'])!==sha({...currentTools,configHash:currentConfig,sourceFingerprint:currentSource}))
       problems.push(issue('BUILD_TOOLCHAIN_DRIFT','Local toolchain availability/version changed','Reprepare and rehearse Build'));
     for(const item of currentTools.tools.filter(v=>v.required&&!v.available))
       problems.push(issue('BUILD_TOOL_MISSING',item.id+' is required but unavailable','Install/authorize '+item.id+' then rebuild'));

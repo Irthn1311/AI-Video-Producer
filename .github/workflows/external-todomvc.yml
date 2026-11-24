@@ -1,7 +1,7 @@
 name: External TodoMVC pilot
 on:
   push:
-    branches: ['test/external-todomvc-pilot','test/framed-story-demo','feat/additive-scene-transitions']
+    branches: ['test/external-todomvc-pilot','test/framed-story-demo','feat/additive-scene-transitions','feat/focus-and-cue-alignment']
   pull_request:
     paths:
       - 'benchmarks/external-todomvc.mjs'
@@ -12,6 +12,7 @@ on:
       - 'src/assembly.mjs'
       - 'src/assembly-policy.mjs'
       - 'src/production-quality.mjs'
+      - 'src/cue-evidence-alignment.mjs'
       - 'remotion/src/scene-preview.tsx'
   workflow_dispatch:
 permissions:
@@ -23,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [baseline, story]
+        mode: [baseline, story, focus]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,7 +45,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg iproute2 util-linux espeak-ng fonts-noto-core
           npm install --ignore-scripts --no-audit --no-fund
-          if [ "${{ matrix.mode }}" = story ]; then npx remotion browser ensure; fi
+          if [ "${{ matrix.mode }}" != baseline ]; then npx remotion browser ensure; fi
           PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/avp-browsers" npx playwright install chromium --with-deps
       - name: Run unprivileged pilot in a fresh network namespace
         shell: bash

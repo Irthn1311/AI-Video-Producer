@@ -285,6 +285,8 @@
 
 > **PR36 story verified; additive scene transition candidate (CI pending):** actual 36s story and targeted recapture preserve 14/16 media. Sampled frames show small app content and abrupt resets. Opt-in silent boundary-frame crossfade with measured frame timeline, global subtitle offsets and exact source hashes; real media test and external story regression. No overlapping live crossfade or independent semantic acceptance.
 
+> **PR37 verified; focus/cue alignment candidate (CI pending):** four-scene additive assembly/repair PASS. Opt-in detail and whole-source overview, approximate mapped cue/evidence diagnostics, separate external focus pilot and explicit pacing changes. No forced alignment, automatic ROI inference or semantic acceptance claimed.
+
 - [ ] `E2-01` Tạo **MathMate Parity Benchmark**: canvas handwriting, desktop/mobile pairing, real OCR/feedback assertions, Remotion timing/inset, voice/captions, final QA — dùng dữ liệu test an toàn, tránh gọi API trả phí ở CI mặc định.
 - [ ] `E2-02` **Unknown App Benchmark**: ít nhất hai app khác MathMate, thuộc hai domain, có feature inventory, skill/tool selection, storyboard, real capture, final video, repair.
 - [ ] `E2-03` Benchmark Interactive và Autonomous, bao gồm thiếu skill, app thực sự lỗi, provider outage, corrupt artifact, stale source, failed approval.

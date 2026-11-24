@@ -7,6 +7,7 @@ import {verificationMode,requireCoveragePlan,verifySceneClaims} from './evidence
 import {avpDir,readJson,writeJson,sha,fileHash,sceneDir} from './utils.mjs';
 import {sourceFingerprint} from './inspect.mjs';
 import {adapterFingerprint} from './adapters.mjs';
+import {selectedVoiceFingerprint} from './voice-selection.mjs';
 
 const stamp=()=>new Date().toISOString();
 const planPath=(root,stage)=>path.join(avpDir(root),'planning',stage==='coverage'?'feature-coverage.json':'storyboard.json');
@@ -38,9 +39,10 @@ function editAssetsFingerprint(scene,root){
 /** Capture uses a content fingerprint, not file names or file sizes. Inputs include browser settings and app origin. */
 export function inputHashes(scene,config,ss={},root){
   const artifacts=ss.artifacts||{};
+  const selectionFingerprint=selectedVoiceFingerprint(root,config,scene);
   return {
     capture:sha({schema:scene.capture?.adapter?3:2,capture:scene.capture,adapter:scene.capture?.adapter&&root?adapterFingerprint(root,config,scene):undefined,duration:scene.durationSec,appUrl:config.appUrl,viewport:{width:config.render?.width||1920,height:config.render?.height||1080,fps:config.render?.fps||30},source:root?sourceFingerprint(root,config):null,provider:'playwright-v1'}),
-    voice:sha({schema:2,narration:scene.narration,voice:config.voiceover,language:config.language?.narration,modelOverride:process.env.GEMINI_TTS_MODEL||null}),
+    voice:sha({schema:2,narration:scene.narration,voice:config.voiceover,language:config.language?.narration,modelOverride:process.env.GEMINI_TTS_MODEL||null,selectedVoice:selectionFingerprint}),
     captions:sha({schema:3,narration:scene.narration,timing:scene.captionTiming??null,language:config.language?.subtitles,voiceEnabled:config.voiceover?.enabled!==false,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null}),
     preview:sha({schema:2,render:config.render,duration:scene.durationSec,style:config.style||{},edit:scene.edit,editAssets:editAssetsFingerprint(scene,root),captureHash:artifacts.capture?.hash,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null,captionHash:artifacts.captions?.hash,captionMetadataHash:artifacts.captions?.metadataHash})
   };

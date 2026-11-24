@@ -103,6 +103,8 @@
 
 ## A5. Storyboard, Scene/Shot Design & Rehearsal — P0
 
+> **F-04c first slice (PARTIAL; CI pending):** opt-in `creative.timing` measures full-scene audition duration and amplitude silence via FFprobe/FFmpeg, maintains content-addressed voice variants and explicit selection, shares Gemini budget reservation, compares actual browser rehearsal action durations against scene slots, binds selection to Build lock, and reuses exact selected audio in Production. No live paid TTS test, automatic language/accent or speech correctness scoring, word-level alignment, semantic audio/action synchronization, or automatic timing edits. See `docs/voice-timing.md`.
+
 > **F-04b first slice (PARTIAL; CI pending):** agent-authored storyboard can replace/add/reorder canonical scenes via bounded source context, source-file hash references, strict claim/recipe validation, explicit hash-confirmed apply and per-scene diff. Editorial roles/state/fallback metadata are recorded and bound to Build; locked scenes are protected. Cross-scene dependencies are recorded but block Build until orchestration exists. This is not automatic LLM story generation or proof of semantic truth, shot-level timing, runtime reset or unknown-app generalization. See `docs/agent-storyboard.md`. Keep A5 unchecked pending full acceptance.
 
 - [ ] `A5-01` Sinh storyboard theo features **đã khảo sát**, không hallucinate; claim → evidence conditions → scene IDs → shot IDs.

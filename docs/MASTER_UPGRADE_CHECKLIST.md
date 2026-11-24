@@ -291,6 +291,8 @@
 
 > **PR39 verified; cue repair candidate (CI pending):** Linux/Windows/macOS intake PASS. New advisory bounded pause-advance planner and real sync-repair variant with measured before/after, separate filter/cleanup repairs, unchanged audio/caption hashes and no threshold relaxation. Natural speech/independent agent still pending.
 
+> **EduTwin external candidate (CI pending):** user-requested `ui_update_v4` pin, real full-stack disposable app, four-scene Vietnamese student journey, actual authentication and screen evidence. PR41 MathMate remains blocked at browser E2E. No live AI, independent agent or complete parity claim.
+
 - [ ] `E2-01` Tạo **MathMate Parity Benchmark**: canvas handwriting, desktop/mobile pairing, real OCR/feedback assertions, Remotion timing/inset, voice/captions, final QA — dùng dữ liệu test an toàn, tránh gọi API trả phí ở CI mặc định.
 - [ ] `E2-02` **Unknown App Benchmark**: ít nhất hai app khác MathMate, thuộc hai domain, có feature inventory, skill/tool selection, storyboard, real capture, final video, repair.
 - [ ] `E2-03` Benchmark Interactive và Autonomous, bao gồm thiếu skill, app thực sự lỗi, provider outage, corrupt artifact, stale source, failed approval.

@@ -1,0 +1,93 @@
+name: EduTwin ui_update_v4 real app pilot
+on:
+  push:
+    branches: ['test/edutwin-ui-v4-pilot']
+  pull_request:
+    paths:
+      - 'benchmarks/external-edutwin.mjs'
+      - 'benchmarks/edutwin/**'
+      - '.github/workflows/edutwin-pilot.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  edutwin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: nuyntai19/AI-Driven-Adaptive-Learning-and-Competency-Assessment-Platform
+          ref: 5d64f7b172a06eefeeb3cff65c85d6d6761db825
+          path: edutwin-source
+          persist-credentials: false
+      - name: Stage pinned source and report
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C edutwin-source rev-parse HEAD)" = '5d64f7b172a06eefeeb3cff65c85d6d6761db825'
+          mkdir -p "$RUNNER_TEMP/edutwin-build" "$RUNNER_TEMP/avp-build" "$RUNNER_TEMP/edutwin-report" "$RUNNER_TEMP/edutwin-dist"
+          git -C edutwin-source archive HEAD src web/edutwin-web .dockerignore | tar -x -C "$RUNNER_TEMP/edutwin-build"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/avp-build"
+          printf '%s\n' '{"status":"BLOCKED","stage":"build-or-runtime-start"}' > "$RUNNER_TEMP/edutwin-report/result.json"
+      - name: Build actual API, frontend and AVP runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -f "$RUNNER_TEMP/edutwin-build/src/EduTwin.API/Dockerfile" -t avp-edutwin-api:ci "$RUNNER_TEMP/edutwin-build"
+          docker build -f "$RUNNER_TEMP/edutwin-build/web/edutwin-web/Dockerfile" -t avp-edutwin-web:ci "$RUNNER_TEMP/edutwin-build/web/edutwin-web"
+          docker build -f "$RUNNER_TEMP/avp-build/benchmarks/edutwin/Dockerfile" -t avp-edutwin-runner:ci "$RUNNER_TEMP/avp-build"
+          web=$(docker create avp-edutwin-web:ci)
+          trap 'docker rm -v "$web" >/dev/null 2>&1 || true' EXIT
+          docker cp "$web:/usr/share/nginx/html/." "$RUNNER_TEMP/edutwin-dist/"
+          chmod -R a+rX "$RUNNER_TEMP/edutwin-dist"
+      - name: Run disposable real stack and AVP production with no runtime egress
+        shell: bash
+        run: |
+          set -euo pipefail
+          db=avp-edutwin-db
+          api=avp-edutwin-api
+          app=avp-edutwin-runner
+          trap 'docker rm -f -v "$app" "$api" "$db" >/dev/null 2>&1 || true' EXIT
+          export MYSQL_ROOT_PASSWORD="$(openssl rand -hex 24)"
+          export MYSQL_PASSWORD="$(openssl rand -hex 24)"
+          export AVP_QA_PASSWORD="$(openssl rand -hex 24)"
+          export Jwt__SigningKey="$(openssl rand -hex 48)"
+          export Seed__CenterManagerPassword="$AVP_QA_PASSWORD"
+          export PlatformBootstrap__AdminPassword="$(openssl rand -hex 24)"
+          export ConnectionStrings__Default="Server=127.0.0.1;Port=3306;Database=edutwin_avp_qa;User=avp_qa;Password=$MYSQL_PASSWORD"
+          for value in "$MYSQL_ROOT_PASSWORD" "$MYSQL_PASSWORD" "$AVP_QA_PASSWORD" "$Jwt__SigningKey" "$PlatformBootstrap__AdminPassword"; do echo "::add-mask::$value"; done
+          docker run -d --name "$db" --network none -e MYSQL_ROOT_PASSWORD -e MYSQL_PASSWORD -e MYSQL_DATABASE=edutwin_avp_qa -e MYSQL_USER=avp_qa mysql:8.0.35 --log-bin-trust-function-creators=1 >/dev/null
+          ready=0
+          for _ in $(seq 1 90); do
+            if docker exec "$db" mysqladmin ping -h 127.0.0.1 --silent >/dev/null 2>&1; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1
+          docker run -d --name "$api" --network "container:$db" --cap-drop ALL --security-opt no-new-privileges \
+            -e ASPNETCORE_ENVIRONMENT=Development -e ASPNETCORE_URLS=http://127.0.0.1:8080 \
+            -e ConnectionStrings__Default -e Jwt__SigningKey -e Jwt__Issuer=avp-qa -e Jwt__Audience=avp-qa \
+            -e Seed__Enabled=true -e Seed__CenterManagerPassword -e PlatformBootstrap__AdminUsername=platform.admin -e PlatformBootstrap__AdminPassword \
+            -e Gemini__ApiKey= -e Gemini__BackupKeys= -e Gemini__BackupKeys_2= -e AIGrading__GroqApiKey= \
+            -e HealthChecks__MySqlHost=127.0.0.1 -e HealthChecks__MySqlPort=3306 \
+            -e AttachmentStorage__RootPath=/tmp/avp-storage -e AttachmentStorage__DataProtectionKeysPath=/tmp/avp-keys avp-edutwin-api:ci >/dev/null
+          set +e
+          timeout 23m docker run --name "$app" --network "container:$db" --cap-drop ALL --security-opt no-new-privileges --shm-size=1g --pids-limit=1024 \
+            -e AVP_QA_PASSWORD --mount "type=bind,source=$GITHUB_WORKSPACE/edutwin-source,target=/target,readonly" \
+            --mount "type=bind,source=$RUNNER_TEMP/edutwin-dist,target=/web-dist,readonly" avp-edutwin-runner:ci
+          status=$?
+          set -e
+          docker cp "$app:/work/public/." "$RUNNER_TEMP/edutwin-report/" || true
+          test "$status" = 0
+          python -c 'import json,sys; assert json.load(open(sys.argv[1]))["status"]=="TECHNICAL_PASS"' "$RUNNER_TEMP/edutwin-report/result.json"
+      - name: Retain sanitized pilot output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: edutwin-ui-v4-pilot
+          path: ${{ runner.temp }}/edutwin-report/
+          if-no-files-found: ignore
+          retention-days: 7

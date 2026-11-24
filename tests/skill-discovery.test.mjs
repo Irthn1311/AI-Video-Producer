@@ -107,7 +107,7 @@ test('read-only GitHub research uses predefined terms, filters invalid metadata 
     ]})};
   };
   try{
-    assert.throws(()=>searchExternalSkills(f.root,f.config,{online:false}),/--online/);
+    await assert.rejects(searchExternalSkills(f.root,f.config,{online:false}),/--online/);
     const now=Date.parse('2026-11-24T08:00:00Z');
     const result=await searchExternalSkills(f.root,f.config,{online:true,fetchImpl,now});
     assert.equal(result.mode,'BOUNDED_GITHUB_REPO_RESEARCH_ONLY');

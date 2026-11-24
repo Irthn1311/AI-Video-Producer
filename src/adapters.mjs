@@ -90,6 +90,8 @@ export function validateAdapterManifest(manifest,config,scene){
     throw Error('Adapter capability IDs must be a unique nonempty bounded list');
   boundedActions(manifest.actions,'adapter.actions');
   boundedActions(manifest.resetActions,'adapter.resetActions',{allowEmpty:true});
+  if(manifest.resetActions.some(x=>assertionTypes.has(x.type)))
+    throw Error('Reset actions must be state cleanup only; evidence assertions belong to primary actions');
   if(!Array.isArray(manifest.expectedEvidenceIds)||!manifest.expectedEvidenceIds.length||
      manifest.expectedEvidenceIds.length>MAX_ACTIONS||
      manifest.expectedEvidenceIds.some(x=>!idValid(x))||
@@ -226,7 +228,7 @@ export function projectAdapterSnapshot(root,config){
 function installBrowserOriginGuard(context,appOrigin,record){
   // Browser-level guard, not an OS/container sandbox. App server code is still
   // trusted to have been launched separately in an authorized test environment.
-  context.route('**/*',async route=>{
+  return context.route('**/*',async route=>{
     try{
       const u=new URL(route.request().url());
       if(u.origin===appOrigin){await route.continue();return;}
@@ -257,7 +259,7 @@ export async function trialAdapter(root,config,scene,{allowActions=false}={}){
       viewport:{width:config.render?.width||1280,height:config.render?.height||720},
       acceptDownloads:false,serviceWorkers:'block',permissions:[]
     });
-    installBrowserOriginGuard(context,data.appOrigin,record);
+    await installBrowserOriginGuard(context,data.appOrigin,record);
     page=await context.newPage();
     page.on('pageerror',e=>record.pageErrors.push(String(e.message).slice(0,300)));
     let error=null;
@@ -279,6 +281,8 @@ export async function trialAdapter(root,config,scene,{allowActions=false}={}){
        observed.some((id,i)=>id!==data.expectedEvidenceIds[i]||record.assertions[i].pass!==true))
       error??=Error('Adapter trial missing ordered positive evidence assertions');
     if(record.pageErrors.length)error??=Error('App emitted uncaught browser page errors');
+    if(sourceFingerprint(root,config)!==record.sourceFingerprint)
+      error??=Error('App source changed during adapter trial; rerun review and trial');
     if(error)throw error;
     record.status='PASS';record.finishedAt=new Date().toISOString();
     writeJson(trialFile,record);
@@ -295,11 +299,11 @@ export async function trialAdapter(root,config,scene,{allowActions=false}={}){
   }finally{await context?.close().catch(()=>{});await browser?.close().catch(()=>{});}
 }
 /** Restrict adapter-based scene capture/rehearsal browser requests too. */
-export function protectAdapterBrowser(context,config,scene){
+export async function protectAdapterBrowser(context,config,scene){
   if(!scene.capture?.adapter)return;
   requireAdapterReadyContext(config);
   const record={blockedExternalRequests:0};
-  installBrowserOriginGuard(context,loopbackOrigin(config.appUrl),record);
+  await installBrowserOriginGuard(context,loopbackOrigin(config.appUrl),record);
   return record;
 }
 function requireAdapterReadyContext(config){loopbackOrigin(config.appUrl);}

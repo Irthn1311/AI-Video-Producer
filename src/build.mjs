@@ -237,6 +237,16 @@ function checkArtifacts(root,config){
     const optionalGaps=currentMatching.unresolved.filter(x=>!x.required);
     if(optionalGaps.length)
       warnings.push('Unverified source-derived needs require review; do not promise these features in video until supported: '+optionalGaps.map(x=>x.id).join(', '));
+    for(const scene of config.scenes.filter(s=>s.capture?.adapter)){
+      if(scene.claims?.length){
+        try{
+          const ids=new Set(adapterActions(root,config,scene).map(a=>a.evidenceId).filter(Boolean));
+          for(const claim of scene.claims||[])for(const id of claim.evidenceIds||[])
+            if(!ids.has(id))problems.push(issue('BUILD_ADAPTER_CLAIM_MISMATCH',scene.id+': claim '+claim.id+' missing '+id,
+              'Update adapter recipe to assert each declared claim before reapproval and trial'));
+        }catch(e){problems.push(issue('BUILD_ADAPTER_INVALID',scene.id+': '+e.message,'Correct and reapprove adapter manifest'));}
+      }
+    }
     for(const capability of artifacts['capability-profile'].requirements){
       if(capability.unresolvedActions.length)
         problems.push(issue('BUILD_UNKNOWN_ACTION',capability.sceneId+': '+capability.unresolvedActions.join(', '),'Provide a reviewed, sandboxed project adapter in future adapter flow'));

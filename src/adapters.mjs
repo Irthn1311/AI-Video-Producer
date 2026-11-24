@@ -17,7 +17,9 @@ const actionKeys=new Set(['type','path','testId','role','name','label','text','v
 const responseKeys=new Set(['pathContains','method','status','bodyIncludes']);
 const idValid=id=>typeof id==='string'&&/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(id);
 const adapterDir=(root,id)=>path.join(avpDir(root),'adapters',safeName(id));
-export const adapterPath=(root,id)=>path.join(adapterDir(root,id),'manifest.json');
+// Recipes belong to the project so they can be versioned in Git.
+// Approvals and browser trial evidence remain workspace-local.
+export const adapterPath=(root,id)=>path.join(root,'avp-adapters',safeName(id),'manifest.json');
 const reviewPath=(root,id)=>path.join(adapterDir(root,id),'review.json');
 const reportPath=(root,id)=>path.join(adapterDir(root,id),'trial-report.json');
 const receiptPath=(root,id)=>path.join(adapterDir(root,id),'trial-receipt.json');
@@ -111,6 +113,10 @@ function ensureManifest(root,config,scene){
   if(typeof id!=='string'||!id.length)throw Error('Scene does not declare capture.adapter');
   safeName(id);
   const target=adapterPath(root,id);
+  const parent=path.dirname(target),base=path.dirname(parent);
+  if((fs.existsSync(base)&&fs.lstatSync(base).isSymbolicLink())||
+     (fs.existsSync(parent)&&fs.lstatSync(parent).isSymbolicLink()))
+    throw Error('Symlinked adapter folder is not permitted');
   if(!safeFile(target))throw Error('Adapter manifest missing: '+id);
   const data=validateAdapterManifest(readJson(target),config,scene);
   if(data.id!==id)throw Error('Adapter ID mismatch');
@@ -133,6 +139,10 @@ export function scaffoldAdapter(root,config,scene,{id,capabilities=[]}={}){
   safeName(id);
   if(!Array.isArray(capabilities)||!capabilities.length)throw Error('Provide --capability ID[,ID] for an adapter');
   const file=adapterPath(root,id);
+  const base=path.dirname(path.dirname(file)),parent=path.dirname(file);
+  if((fs.existsSync(base)&&fs.lstatSync(base).isSymbolicLink())||
+     (fs.existsSync(parent)&&fs.lstatSync(parent).isSymbolicLink()))
+    throw Error('Symlinked adapter folder is not permitted');
   if(fs.existsSync(file))throw Error('Refusing to overwrite existing adapter manifest');
   const actions=scene.capture.actions.length?structuredClone(scene.capture.actions):
     [{type:'goto',path:'/'},{type:'assertVisible',role:'heading',name:'REPLACE_WITH_REAL_HEADING',evidenceId:'replace-me'}];

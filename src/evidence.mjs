@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {avpDir,sceneDir,readJson,fileHash} from './utils.mjs';
 import {captureEvidencePassed} from './capture-assertions.mjs';
+import {adapterActions} from './adapters.mjs';
 
 const assertionTypes = new Set(['assertVisible','assertText','assertAttribute','clickExpectResponse']);
 const safeId = v => typeof v==='string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(v);
@@ -54,7 +55,9 @@ export function validateClaimConfig(config) {
         throw Error('Claim text must appear verbatim in scene narration: '+claim.id);
       if(!Array.isArray(claim.evidenceIds)||!claim.evidenceIds.length||new Set(claim.evidenceIds).size!==claim.evidenceIds.length)
         throw Error('Claim requires unique evidenceIds: '+claim.id);
-      for(const id of claim.evidenceIds)if(!actionIndex.has(id))
+      // Adapter assertions are checked against the actual reviewed recipe
+      // in the Build Gate and verified at Production runtime.
+      for(const id of claim.evidenceIds)if(!actionIndex.has(id)&&!scene.capture?.adapter)
         throw Error('Claim evidenceId missing from capture actions: '+id);
       covered.add(claim.featureId);
     }
@@ -119,7 +122,8 @@ export function verifySceneClaims(root,config,scene,state) {
     throw Error('Capture evidence failed required assertions: '+scene.id);
   if(report.captureHash!==artifact.hash||report.captureInputHash!==artifact.inputHash)
     throw Error('Capture evidence is not bound to current footage: '+scene.id);
-  const declared=new Map((scene.capture?.actions||[])
+  const effectiveActions=adapterActions(root,config,scene);
+  const declared=new Map(effectiveActions
     .filter(a=>assertionTypes.has(a.type)).map(a=>[a.evidenceId,a.type]));
   const observed=new Map();
   for(const item of report.assertions){

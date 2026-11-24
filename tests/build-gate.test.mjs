@@ -118,7 +118,7 @@ test('unreviewed external adapter requests cannot silently pass Build preflight'
     assert.equal(cli(f.root,'plan').status,0);
     prepareBuild(f.root,f.config);
     const r=checkBuild(f.root,f.config,f.state);
-    assert.ok(r.problems.some(x=>x.code==='BUILD_ADAPTER_UNSUPPORTED'));
+    assert.ok(r.problems.some(x=>x.code==='BUILD_ADAPTER_UNVERIFIED'));
   }finally{cleanup(f);}
 });
 test('legacy project with no opted-in Build retains previous CLI workflow gates',()=>{

@@ -211,6 +211,29 @@ async function exercise(kind){
     assert.equal(fileHash(path.join(root,'.avp','releases',applied.releaseId,'final.mp4')),originalFinal);
     await deny(root,['semantic','record','--scene','workflow','--hash',sem.reviewHash,'--confirm'],/Review must explicitly bind/);
     assert.equal((await json(root,'build','gate')).status,'READY');
+    // Controlled matched-input full run: use the exact repaired v2 config, same source/server,
+    // frozen plan, selected WAV and toolchain. This is a disposable fixture-only workspace,
+    // not a command that clears user project artifacts. Keep old scene/output directories.
+    const v2Archive=await json(root,'release','archive','--confirm');
+    const avp=path.join(root,'.avp'),stateFile=path.join(avp,'run-state.json'),v2State=readJson(stateFile);
+    fs.renameSync(path.join(avp,'scenes'),path.join(avp,'matched-baseline-scenes'));
+    fs.renameSync(path.join(avp,'output'),path.join(avp,'matched-baseline-output'));
+    const cleanState=structuredClone(v2State);cleanState.scenes={};delete cleanState.output;delete cleanState.reviews.final;
+    writeJson(stateFile,cleanState);
+    assert.equal((await json(root,'build','freeze','--confirm')).status,'READY');
+    for(const scene of current.scenes){
+      await workflowDispatch(root,'capture','--allow-actions');await workflowDispatch(root,'voice');
+      await workflowDispatch(root,'captions');await workflowDispatch(root,'preview');await workflowDispatch(root,'qa');
+      await cli(root,'approve','--stage','scene','--scene',scene.id);
+    }
+    await workflowDispatch(root,'render');await cli(root,'approve','--stage','final');
+    const matchedFull=await json(root,'benchmark','record','--label',kind+'-v2-full','--kind','full','--scope','fixture','--confirm');
+    const matched=await json(root,'benchmark','compare','--full',matchedFull.id,'--repair',repairBench.id);
+    assert.equal(matched.status,'MATCHED_INPUT_OBSERVATION');assert.equal(matchedFull.configHash,repairBench.configHash);
+    assert.equal(matchedFull.inputContractHash,repairBench.inputContractHash);assert.equal(matchedFull.reservedCallsDelta,0);
+    assert.equal(matchedFull.regeneratedPreviewSec>repairBench.regeneratedPreviewSec,true);
+    assert.equal((await json(root,'release','verify','--hash',v2Archive.releaseId)).status,'VERIFIED_ARCHIVE');
+    console.log('AVP_MATCHED_BENCHMARK '+JSON.stringify({fixture:kind,full:matchedFull,repair:repairBench,comparison:matched}));
     // An altered selected WAV must block the frozen Build before any new render.
     const listed=await json(root,'timing','list','--scene','workflow');
     const selected=listed.candidates.find(c=>c.candidateHash===listed.selected);

@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {compareBenchmarks,readBenchmark} from '../src/benchmark.mjs';
 import {sha,writeJson} from '../src/utils.mjs';
-const base={id:'full',kind:'full',configHash:'c',sourceFingerprint:'s',environmentHash:'e',scope:'AUTHOR_KNOWN_FIXTURE',production:{observedMs:2000},regeneratedCaptureSec:10,regeneratedPreviewSec:10,reservedCallsDelta:0};
+const base={id:'full',kind:'full',inputContractHash:'a'.repeat(64),configHash:'c',sourceFingerprint:'s',environmentHash:'e',scope:'AUTHOR_KNOWN_FIXTURE',production:{observedMs:2000},regeneratedCaptureSec:10,regeneratedPreviewSec:10,reservedCallsDelta:0};
 test('benchmark comparison reports percentage only for matching inputs',()=>{
   const repair={...base,id:'repair',kind:'repair',production:{observedMs:500},regeneratedCaptureSec:0,regeneratedPreviewSec:4};
   assert.equal(compareBenchmarks(base,repair).observedDispatchReductionPct,75);
   const diff=compareBenchmarks(base,{...repair,configHash:'other'});assert.equal(diff.comparable,false);assert.equal(diff.observedDispatchReductionPct,null);assert.equal(diff.delta.captureSec,10);
+  assert.equal(compareBenchmarks(base,{...repair,inputContractHash:'b'.repeat(64)}).comparable,false);
+  assert.equal(compareBenchmarks({...base,inputContractHash:undefined},{...repair,inputContractHash:undefined}).comparable,false);
   assert.throws(()=>compareBenchmarks(repair,base));
 });
 test('tampered benchmark receipt is rejected',()=>{

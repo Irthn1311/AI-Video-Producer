@@ -55,7 +55,10 @@ export function benchmarkRecord(root,config,state,{label,kind,scope,confirm=fals
   const media=(part,durationField)=>rows.filter(s=>s.artifactStatus[part]==='EXECUTED').reduce((n,s)=>n+s[durationField],0);
   const environment={node:process.version,platform:process.platform,arch:process.arch,cpu:os.cpus()[0]?.model||null,logicalCpus:os.cpus().length,
     ffmpeg:toolVersion('ffmpeg'),ffprobe:toolVersion('ffprobe')};
-  const data={schemaVersion:1,label,kind,scope:scope==='fixture'?'AUTHOR_KNOWN_FIXTURE':'OPERATOR_DECLARED_EXTERNAL_NOT_VERIFIED_BLIND',
+  const inputContractHash=sha({planHash:next.planHash,scenes:config.scenes.map(s=>({id:s.id,captureInput:current[s.id].artifacts.capture.inputHash,
+    voiceInput:config.voiceover?.enabled!==false?current[s.id].artifacts.voice.inputHash:null,
+    voiceHash:config.voiceover?.enabled!==false?current[s.id].artifacts.voice.hash:null}))});
+  const data={schemaVersion:1,inputContractHash,label,kind,scope:scope==='fixture'?'AUTHOR_KNOWN_FIXTURE':'OPERATOR_DECLARED_EXTERNAL_NOT_VERIFIED_BLIND',
     sourceFingerprint:sourceFingerprint(root,config),configHash:sha(config),planHash:next.planHash,revision:next.revision,
     outputHash:report.outputHash,finalDurationSec:report.durationSec,environment,environmentHash:sha(environment),
     production:p.totals,byKind:p.byKind,scenes:rows,regeneratedCaptureSec:media('capture','captureSec'),regeneratedPreviewSec:media('preview','previewSec'),
@@ -77,12 +80,12 @@ export function readBenchmark(root,id){
 }
 export function compareBenchmarks(full,repair){
   if(full.kind!=='full'||repair.kind!=='repair')throw Error('Compare full baseline first, then repair');
-  const comparable=full.configHash===repair.configHash&&full.sourceFingerprint===repair.sourceFingerprint&&full.environmentHash===repair.environmentHash&&full.scope===repair.scope;
+  const comparable=hash(full.inputContractHash)&&full.inputContractHash===repair.inputContractHash&&full.configHash===repair.configHash&&full.sourceFingerprint===repair.sourceFingerprint&&full.environmentHash===repair.environmentHash&&full.scope===repair.scope;
   const delta={observedDispatchMs:full.production.observedMs-repair.production.observedMs,
     captureSec:full.regeneratedCaptureSec-repair.regeneratedCaptureSec,previewSec:full.regeneratedPreviewSec-repair.regeneratedPreviewSec,
     reservedCalls:full.reservedCallsDelta-repair.reservedCallsDelta};
   return {status:comparable?'MATCHED_INPUT_OBSERVATION':'UNMATCHED_INPUT_OBSERVATION',fullId:full.id,repairId:repair.id,
     comparable,delta,observedDispatchReductionPct:comparable&&full.production.observedMs>0?Math.round(delta.observedDispatchMs/full.production.observedMs*10000)/100:null,
-    note:comparable?'Matched configuration/source/environment receipt, not randomized controlled experiment. Report repeated trials and variance.':'Different config/source/environment/scope: raw observed delta only; do not call it measured same-input savings.'};
+    note:comparable?'Matched configuration/source/environment, frozen plan, capture/voice inputs and voice bytes; not randomized controlled experiment. Report repeated trials and variance.':'Different or missing input contract/config/source/environment/scope: raw observed delta only; do not call it measured same-input savings.'};
 }
 export function listBenchmarks(root){if(!fs.existsSync(directory(root)))return [];return fs.readdirSync(directory(root),{withFileTypes:true}).filter(x=>x.isFile()&&/^[a-f0-9]{64}\.json$/.test(x.name)).map(x=>readBenchmark(root,x.name.slice(0,-5)));}

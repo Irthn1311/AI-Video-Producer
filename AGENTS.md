@@ -1,6 +1,10 @@
 # AI Video Producer — instructions for coding agents
 
-Read `README.md`, `docs/architecture.md`, and `.agents/skills/video-producer/SKILL.md` first. These instructions apply to Codex, Claude Code, Gemini CLI, and any capable coding agent. Do not assume the agent automatically discovers `.agents/skills`: open the skill files explicitly if necessary.
+Read `README.md`, `docs/architecture.md`, `docs/MASTER_UPGRADE_CHECKLIST.md`, and `.agents/skills/video-producer/SKILL.md` first. These instructions apply to Codex, Claude Code, Gemini CLI, and any capable coding agent. Do not assume the agent automatically discovers `.agents/skills`: open the skill files explicitly if necessary.
+
+## Upgrade tracking: mandatory source of truth
+
+Before any AVP enhancement or PR, inspect `docs/MASTER_UPGRADE_CHECKLIST.md`. Choose explicit checklist IDs; implement only what supports the current milestone. Add tests, evidence, and limitations to the PR. Mark an item [x] **only after** implementation and relevant E2E/CI acceptance — never based on prose, schema, or an unexecuted routing plan. Update the checklist when scope/acceptance changes. Do not mix App-to-Video with the separate Agentic-Video-Studio project.
 
 ## Primary objective
 Produce an honest demo of a user-supplied application from **verified** functionality, with reusable per-scene artifacts, narration, captions, QA, and a final video. Agent reasoning decides *what to show*; deterministic CLI and providers handle media tasks. The CLI is not an autonomous LLM.

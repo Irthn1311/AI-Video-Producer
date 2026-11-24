@@ -1,5 +1,8 @@
 # Roadmap and acceptance criteria
 
+**Master execution checklist:** [MASTER_UPGRADE_CHECKLIST.md](MASTER_UPGRADE_CHECKLIST.md). This roadmap is a historical/high-level summary. For currently completed vs pending items and acceptance tests, use the master checklist and the actual CI/PR evidence.
+
+
 ## v0.1 implemented in repository
 
 - Portable Node CLI, config validation, project initialization, inspection, planning artifacts, review gates, scene capture/import, optional Gemini TTS, estimated SRT, FFmpeg preview and final concat, optional Remotion adapter.

@@ -172,17 +172,25 @@ async function exercise(kind){
     const unchanged=sceneDir(root,'overview'),changed=sceneDir(root,'workflow');
     const keep=['capture.mp4','voice.wav','preview.mp4','qa-report.json'].map(n=>fileHash(path.join(unchanged,n)));
     const keepChanged=['capture.mp4','voice.wav'].map(n=>fileHash(path.join(changed,n)));
-    // Only edit the workflow shot; the first scene remains locked and approved.
-    await cli(root,'unlock','--scene','workflow');
+    // Only edit the workflow shot; checkpoint automatically and preserve the approved final.
+    const originalFinal=fileHash(path.join(root,'.avp','output','final.mp4'));
+    const sem=await json(root,'semantic','context','--scene','workflow');
+    writeJson(path.join(root,'.avp','repair','semantic-review.json'),{schemaVersion:1,reviewHash:sem.reviewHash,reviewer:'EXTERNAL_AGENT',findings:Object.fromEntries(sem.dimensions.map(x=>[x,'NOT_EVALUATED']))});
+    assert.equal((await json(root,'semantic','record','--scene','workflow','--hash',sem.reviewHash,'--confirm')).disposition,'REVIEW_ISSUES_OR_INCOMPLETE');
     const ctx=await json(root,'storyboard','context');
     const revision=structuredClone(proposal);
     revision.baseConfigHash=ctx.baseConfigHash;revision.sourceFingerprint=ctx.sourceFingerprint;
     revision.scenes[1].scene.edit.shots[0].zoom=1.2;
     writeJson(proposalFile,revision);
-    const diff=await json(root,'storyboard','check');
-    assert.deepEqual(diff.diff.changed,['workflow']);
-    assert.deepEqual(diff.diff.shotChanges.workflow.changed,['result']);
-    await json(root,'storyboard','apply','--hash',diff.proposalHash,'--confirm');
+    writeJson(path.join(root,'.avp','repair','request.json'),{schemaVersion:1,baseConfigHash:ctx.baseConfigHash,sceneId:'workflow',shotId:'result',cause:'composition',description:'Adjust zoom in result shot',rationale:'Improve focus without changing app interaction'});
+    const planned=await json(root,'repair','plan');assert.deepEqual(planned.shotChanges.changed,['result']);
+    await deny(root,['repair','apply','--hash','bad','--confirm'],/Repair plan changed/);
+    assert.equal(fileHash(path.join(root,'.avp','output','final.mp4')),originalFinal);
+    assert.equal(planned.captureScope,'NONE');assert.equal(planned.nodes.find(n=>n.kind==='preview').action,'REBUILD');
+    assert.equal(planned.nodes.find(n=>n.kind==='voice').action,'PRESERVE');
+    const applied=await json(root,'repair','apply','--hash',planned.planHash,'--confirm');assert.equal(applied.status,'APPLIED_REQUIRES_BUILD');assert.ok(applied.releaseId);assert.ok(applied.backup);
+    assert.equal(fileHash(path.join(root,'.avp','releases',applied.releaseId,'final.mp4')),originalFinal);
+    assert.equal((await json(root,'release','verify','--hash',applied.releaseId)).status,'VERIFIED_ARCHIVE');
     current=readJson(path.join(root,'project.json'));
     await deny(root,['preview','--scene','workflow'],/BUILD GATE BLOCKED/);
     await prepareAndReview();
@@ -204,6 +212,8 @@ async function exercise(kind){
     assert.equal((await json(root,'render')).pass,true);
     assert.deepEqual(['capture.mp4','voice.wav','preview.mp4','qa-report.json'].map(n=>fileHash(path.join(unchanged,n))),keep);
     assert.deepEqual(['capture.mp4','voice.wav'].map(n=>fileHash(path.join(changed,n))),keepChanged);
+    assert.equal(fileHash(path.join(root,'.avp','releases',applied.releaseId,'final.mp4')),originalFinal);
+    await deny(root,['semantic','record','--scene','workflow','--hash',sem.reviewHash,'--confirm'],/Review must explicitly bind/);
     assert.equal((await json(root,'build','gate')).status,'READY');
     // An altered selected WAV must block the frozen Build before any new render.
     const listed=await json(root,'timing','list','--scene','workflow');

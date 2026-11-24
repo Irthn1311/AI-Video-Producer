@@ -91,16 +91,16 @@ function inspectScenes(entries,features){
   return {scenes,metadata};
 }
 function duration(config){return config.scenes.reduce((sum,s)=>sum+s.durationSec,0);}
-function checkLocked(root,current,next){
+function checkLocked(root,current,next,repairTarget=null){
   const state=loadState(root),before=new Map(current.scenes.map(s=>[s.id,s])),after=new Map(next.scenes.map(s=>[s.id,s]));
   for(const [id,ss] of Object.entries(state.scenes||{})){
-    if(!ss.locked)continue;
+    if(!ss.locked||id===repairTarget)continue;
     if(!before.has(id)||!after.has(id)||sha(before.get(id))!==sha(after.get(id))||
        sha(current.creative?.director?.sceneDirections?.[id]||{})!==sha(next.creative?.director?.sceneDirections?.[id]||{}))
       throw Error('Locked scene '+id+' cannot be changed or removed; explicitly unlock first');
   }
 }
-function compile(root,config,proposal){
+function compile(root,config,proposal,repairTarget=null){
   checkPolicy(config);
   exact(proposal,['schemaVersion','baseConfigHash','sourceFingerprint','storyRationale','features','scenes'],'proposal');
   if(proposal.schemaVersion!==1||proposal.baseConfigHash!==sha(config))throw Error('Storyboard proposal has stale base config');
@@ -122,7 +122,7 @@ function compile(root,config,proposal){
     throw Error('Proposed storyboard exceeds creative maximum duration');
   if(Object.keys(config.production?.sceneDependencies||{}).length)
     throw Error('Existing production.sceneDependencies require manual reconciliation before storyboard apply');
-  checkLocked(root,config,next);
+  checkLocked(root,config,next,repairTarget);
   return next;
 }
 function diff(before,after){
@@ -134,6 +134,11 @@ function diff(before,after){
     orderChanged:sha([...old.keys()])!==sha([...fresh.keys()]),
     durationBeforeSec:duration(before),durationAfterSec:duration(after),
     shotChanges:Object.fromEntries([...fresh.keys()].filter(id=>old.has(id)).map(id=>[id,shotDiff(old.get(id),fresh.get(id))]).filter(([,v])=>v!==null))};
+}
+// Repair planner can inspect a candidate without unlocking it. Only the dedicated repair apply path may use this candidate.
+export function repairStoryboardCandidate(root,config,target){
+  const proposal=readJson(proposalPath(root)),next=compile(root,config,proposal,target);
+  return {next,proposalHash:sha(proposal),diff:diff(config,next)};
 }
 export function checkStoryboardProposal(root,config){
   const proposal=readJson(proposalPath(root)),next=compile(root,config,proposal);

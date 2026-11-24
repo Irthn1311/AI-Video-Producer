@@ -45,18 +45,19 @@ export function masterVoice(root,config,scene){
 export function markerTimeline(report,expectedActions){
   const a=report?.actions;
   if(!Array.isArray(a)||a.length!==expectedActions.length)return {pass:false,reason:'ACTION_COUNT'};
-  let last=0;const evidence=[];
+  let last=0;const evidence=[],pauses=[];
   for(let i=0;i<a.length;i++){
     const m=a[i],expected=expectedActions[i];
     if(m.index!==i||m.type!==expected.type||!finite(m.startMs)||!finite(m.endMs)||m.startMs<last||m.endMs<m.startMs)
       return {pass:false,reason:'MARKER_ORDER'};
     last=m.endMs;
+    if(expected.type==='pause'&&!expected.evidenceId&&m.endMs-m.startMs>=600)pauses.push({startSec:m.startMs/1000+.15,endSec:m.endMs/1000-.15});
     if(expected.evidenceId){
       if(m.evidenceId!==expected.evidenceId)return {pass:false,reason:'EVIDENCE_ID'};
       evidence.push({id:m.evidenceId,endMs:m.endMs});
     }
   }
-  return {pass:true,actionEndSec:last/1000,evidence,scope:'MONOTONIC_BROWSER_CLOCK_APPROXIMATE_VIDEO_TIME'};
+  return {pass:true,actionEndSec:last/1000,evidence,pauses,scope:'MONOTONIC_BROWSER_CLOCK_APPROXIMATE_VIDEO_TIME'};
 }
 // Conservative temporal guard: continuous capture playback from time zero through all actions.
 // No claim that this proves pixels, cropping, visibility or semantic truth.
@@ -68,10 +69,12 @@ export function evidenceTimeline(scene,markers,plan,previewSec,captureSec,fps){
   if(!plan)covered=Math.min(previewSec,captureSec);
   else{
     for(const shot of plan.shots||[]){
-      if(shot.file!=='footage/capture.mp4'||shot.playbackRate!==1||shot.transitionInFrames>0)break;
-      const start=shot.trimBefore/fps;
+      if(shot.file!=='footage/capture.mp4'||shot.transitionInFrames>0)break;
+      const start=shot.trimBefore/fps,rate=shot.playbackRate,end=start+shot.playFrames*rate/fps;
       if(Math.abs(start-covered)>1/fps+.001)break;
-      covered=start+shot.playFrames/fps;
+      // Only explicit declared pause interiors may be accelerated. Never infer a network wait is idle.
+      if(rate!==1&&!(rate>1&&rate<=4&&markers.pauses?.some(p=>start>=p.startSec&&end<=p.endSec)))break;
+      covered=end;
       if(covered>=need)break;
     }
   }

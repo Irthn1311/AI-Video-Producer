@@ -20,9 +20,9 @@ export async function capture(root,config,scene,state,opts={}){
   const dir=sceneDir(root,scene.id);fs.mkdirSync(dir,{recursive:true});const raw=path.join(dir,'raw');fs.mkdirSync(raw,{recursive:true});
   const browser=await chromium.launch({headless:true});let ctx;const report={scene:scene.id,actions:[],assertions:[],status:'IN_PROGRESS',startedAt:new Date().toISOString(),
     adapter:adapterProof?{id:adapterProof.id,manifestHash:adapterProof.manifestHash,receiptHash:adapterProof.receiptHash}:null};
-  try{ctx=await browser.newContext({viewport:{width:config.render?.width||1920,height:config.render?.height||1080},recordVideo:{dir:raw,size:{width:config.render?.width||1920,height:config.render?.height||1080}}});await protectAdapterBrowser(ctx,config,scene);const page=await ctx.newPage();const pageErrors=[];report.pageErrors=pageErrors;page.on('pageerror',err=>pageErrors.push(err.message.slice(0,500)));const start=Date.now();
+  try{ctx=await browser.newContext({...(adapterProof?{acceptDownloads:false,serviceWorkers:'block',permissions:[]}:{}),viewport:{width:config.render?.width||1920,height:config.render?.height||1080},recordVideo:{dir:raw,size:{width:config.render?.width||1920,height:config.render?.height||1080}}});await protectAdapterBrowser(ctx,config,scene);const page=await ctx.newPage();const pageErrors=[];report.pageErrors=pageErrors;page.on('pageerror',err=>pageErrors.push(err.message.slice(0,500)));const start=Date.now();
     for(const a of effectiveActions){const startAction=Date.now();
-      await executeCaptureAction(page,a,{appUrl:config.appUrl,dir,report});
+      await executeCaptureAction(page,a,{appUrl:config.appUrl,dir,report,adapter:Boolean(adapterProof)});
       report.actions.push({type:a.type,ms:Date.now()-startAction});}
     let remaining=scene.durationSec*1000-(Date.now()-start);if(remaining>0)await page.waitForTimeout(remaining);
     report.finalUrl=page.url();report.pageErrors=pageErrors;report.elapsedMs=Date.now()-start;

@@ -1,5 +1,6 @@
 import path from 'node:path';
 import {executeCaptureAssertion} from './capture-assertions.mjs';
+import {executePointerPath} from './pointer-actions.mjs';
 
 export function locator(page,action){
   if(action.testId)return page.getByTestId(action.testId);
@@ -10,13 +11,16 @@ export function locator(page,action){
 }
 
 /** Shared deterministic Playwright action runner used for BUILD rehearsal and real capture. */
-export async function executeCaptureAction(page,action,{appUrl,dir,report}){
+export async function executeCaptureAction(page,action,{appUrl,dir,report,adapter=false}){
   switch(action.type){
     case 'goto':{
       const url=new URL(action.path||'/',appUrl),allowed=new URL(appUrl);
       if(url.origin!==allowed.origin)throw Error('Cross-origin navigation blocked for capture/rehearsal');
       await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:60000});break;
     }
+    case 'pointerPath':
+      if(!adapter)throw Error('pointerPath requires a reviewed project adapter');
+      await executePointerPath(page,action,locator);break;
     case 'click':await locator(page,action).click({timeout:30000});break;
     case 'fill':await locator(page,action).fill(action.value??'');break;
     case 'hover':await locator(page,action).hover({timeout:30000});break;

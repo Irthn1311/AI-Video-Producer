@@ -37,3 +37,24 @@ test('creative and required capability gaps are Agent handoffs, not fabricated p
     assert.equal(fs.existsSync(path.join(f.root,'.avp','build','production-plan.json')),false);
   }finally{cleanup(f);}
 });
+
+test('missing required capability routes to research, not external execution or draft freeze',async()=>{
+  const f=fixture();try{
+    f.config.capabilityRequirements=['pointer-interaction'];writeJson(path.join(f.root,'project.json'),f.config);
+    let n=workflowNext(f.root,f.config);
+    for(let i=0;i<2;i++)n=(await workflowStep(f.root,{hash:n.taskHash})).next;
+    assert.equal(n.kind,'capability-research');assert.equal(n.status,'AGENT_REQUIRED');assert.deepEqual(n.capabilities,['pointer-interaction']);
+    assert.equal((await workflowStep(f.root,{hash:n.taskHash,allowActions:true,allowLaunch:true,allowPaidApi:true})).status,'AGENT_REQUIRED');
+    assert.equal(fs.existsSync(path.join(f.root,'.avp','build','build-lock.json')),false);
+  }finally{cleanup(f);}
+});
+test('interrupted Build journal refuses replay even with action permission',async()=>{
+  const f=fixture();try{
+    const n=workflowNext(f.root,f.config);
+    const file=path.join(f.root,'.avp','workflow',n.revision+'.json');
+    writeJson(file,{schemaVersion:1,revision:n.revision,runId:'fault-injection',events:[{key:'analyze:',kind:'analyze',stage:'intake',status:'RUNNING'}]});
+    const blocked=workflowNext(f.root,f.config);assert.equal(blocked.kind,'interrupted-build');assert.equal(blocked.status,'BLOCKED');
+    assert.equal((await workflowStep(f.root,{hash:blocked.taskHash,allowActions:true})).status,'BLOCKED');
+    assert.equal(readJson(file).events.length,1);
+  }finally{cleanup(f);}
+});

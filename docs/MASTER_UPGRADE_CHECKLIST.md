@@ -150,6 +150,8 @@
 
 ## B1. Production Orchestrator & Scene Execution — P1
 
+> **F-05f validation candidate (PARTIAL; CI pending):** end-to-end external dashboard/canvas fixtures and managed Node app through unified workflow, explicit agent and operator handoffs, risk ordering, capability/adapter stops, failure and interruption fault injection, hash-bound repair, telemetry, interactive review and autonomous Production. Per-revision paid reservation guard hardened. No independent unknown-repo/LLM benchmark or all A6/B1/D criteria completion. See `docs/agentic-execution-validation.md`.
+
 > **F-05e (PARTIAL; CI pending):** read-only `telemetry` aggregates Build/Production journal attempts, duration, failures, retry/reconciliation and known capability outcomes; provider reservation vs observed dispatch/format outcome; current artifact integrity and unchanged baseline on frozen production revision. Workflow skill matching reuses bounded analysis and invalidates on registry hash. No actual billing, external LLM token/quota, complete legacy instrumentation, measured counterfactual savings or automatic quality downgrade.
 
 > **F-05d (PARTIAL; CI pending):** unified `workflow next|step` derives Build/Production task from canonical gate, current source/config, cached bounded analysis and skills, runtime/adapter status and rehearsal proofs; task hash, explicit authorization/review/agent handoffs, risk-prioritized pending rehearsal, bounded local Build journal/attempts/observed duration, delegates frozen Production to existing executor. No LLM execution, automatic skill installation, automatic approvals, semantic reasoning, global lock or hard wall-clock kill. See `docs/workflow.md`.

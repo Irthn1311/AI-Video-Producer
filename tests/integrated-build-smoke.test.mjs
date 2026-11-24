@@ -17,6 +17,14 @@ const cli=async(root,...args)=>{
 };
 const json=async(root,...args)=>JSON.parse(await cli(root,...args));
 const deny=async(root,args,pattern)=>assert.rejects(cli(root,...args),e=>pattern.test(e.stderr||''));
+// Exit 2 is a structured decision, not a failed subprocess invocation.
+const observe=async(root,...args)=>{try{return await json(root,...args);}catch(e){if(e.code!==2)throw e;return JSON.parse(e.stdout);}};
+const workflowDispatch=async(root,kind,...flags)=>{
+  const next=await observe(root,'workflow','next');assert.equal(next.status,'NEXT',JSON.stringify(next));
+  assert.equal(next.kind==='production'?next.operation:next.kind,kind,JSON.stringify(next));
+  const result=await json(root,'workflow','step','--hash',next.taskHash,...flags);
+  assert.equal(result.status,'EXECUTED',JSON.stringify(result));return result;
+};
 const theme={background:'#101820',panel:'#1B263B',text:'#FFFFFF',accent:'#70D6FF'};
 const dashboardHtml='<!doctype html><h1>Inventory dashboard</h1><button data-testid="filter">Filter stock</button><p data-testid="result">All items</p><script>document.querySelector("button").onclick=()=>document.querySelector("[data-testid=result]").textContent="In-stock items";</script>';
 const canvasHtml='<!doctype html><h1>Drawing editor</h1><canvas data-testid="canvas" data-drawn="no" width="230" height="80"></canvas><script>const c=document.querySelector("canvas"),ctx=c.getContext("2d");let drawing=false;c.addEventListener("pointerdown",e=>{drawing=true;ctx.beginPath();ctx.moveTo(e.offsetX,e.offsetY)});c.addEventListener("pointermove",e=>{if(drawing){ctx.lineTo(e.offsetX,e.offsetY);ctx.stroke();c.dataset.drawn="yes"}});c.addEventListener("pointerup",()=>drawing=false);</script>';
@@ -44,6 +52,8 @@ async function exercise(kind){
       timing:{maxSilenceSec:2,actionToleranceSec:.25},visual:{consistentTheme:true}};
     if(kind==='canvas')config.capabilityRequirements=['pointer-interaction'];
     writeJson(path.join(root,'project.json'),config);
+    await workflowDispatch(root,'analyze');await workflowDispatch(root,'skills');
+    const author=await observe(root,'workflow','next');assert.equal(author.kind,'author-storyboard');assert.equal(author.status,'AGENT_REQUIRED');
     const context=await json(root,'storyboard','context');
     assert.equal(context.creativeBrief.audience,'product reviewers');
     assert.ok(context.sourceFiles.some(f=>f.path==='index.html'));
@@ -74,7 +84,9 @@ async function exercise(kind){
     assert.deepEqual(checked.diff.added,['overview','workflow']);
     await json(root,'storyboard','apply','--hash',checked.proposalHash,'--confirm');
     let current=readJson(path.join(root,'project.json'));
+    await workflowDispatch(root,'skills'); // config changed; source analysis remains current
     if(kind==='canvas'){
+      const missing=await observe(root,'workflow','next');assert.equal(missing.kind,'adapter-design');assert.equal(missing.sceneId,'workflow');
       const scene=current.scenes[1];
       scaffoldAdapter(root,current,scene,{id:'drawing',capabilities:['pointer-interaction']});
       const file=adapterPath(root,'drawing'),manifest=readJson(file);
@@ -83,8 +95,9 @@ async function exercise(kind){
         {type:'pointerPath',testId:'canvas',points:[{x:.1,y:.2},{x:.4,y:.7},{x:.8,y:.25}]},
         {type:'assertAttribute',testId:'canvas',attribute:'data-drawn',expectedValue:'yes',evidenceId:'result'}];
       manifest.expectedEvidenceIds=['before','result'];writeJson(file,manifest);
+      const review=await observe(root,'workflow','next');assert.equal(review.kind,'adapter-review');assert.equal(review.status,'REVIEW_REQUIRED');
       approveAdapter(root,current,scene,{confirm:true});
-      assert.equal((await trialAdapter(root,current,scene,{allowActions:true})).status,'PASS');
+      await workflowDispatch(root,'adapter-trial','--allow-actions');
     }
     const prepareAndReview=async()=>{
       await json(root,'build','prepare','--force');
@@ -93,14 +106,21 @@ async function exercise(kind){
       await json(root,'creative','approve','--hash',creative.briefHash,'--confirm');
       await cli(root,'approve','--stage','coverage');await cli(root,'approve','--stage','storyboard');
     };
-    await prepareAndReview();
+    await workflowDispatch(root,'prepare');
     await deny(root,['capture','--scene','workflow'],/BUILD GATE BLOCKED/);
+    const risky=await observe(root,'workflow','next');assert.equal(risky.kind,'rehearse');assert.equal(risky.sceneId,'workflow');
+    await workflowDispatch(root,'rehearse','--allow-actions');await workflowDispatch(root,'rehearse','--allow-actions');
+    const voiceReview=await observe(root,'workflow','next');assert.equal(voiceReview.kind,'voice-selection');assert.equal(voiceReview.status,'REVIEW_REQUIRED');
     const audio=path.join(root,'test-tone.wav');fixtureAudio(audio);
     for(const scene of current.scenes){
       const candidate=await json(root,'timing','import','--scene',scene.id,'--file',audio,'--confirm');
       await json(root,'timing','select','--scene',scene.id,'--hash',candidate.candidateHash,'--confirm');
-      assert.equal((await json(root,'build','rehearse','--scene',scene.id,'--allow-actions')).status,'PASS');
     }
+    const creativeReview=await observe(root,'workflow','next');assert.equal(creativeReview.kind,'creative-review');
+    await json(root,'creative','approve','--hash',creativeReview.briefHash,'--confirm');
+    assert.equal((await observe(root,'workflow','next')).kind,'planning-review');
+    await cli(root,'approve','--stage','coverage');await cli(root,'approve','--stage','storyboard');
+    assert.equal((await observe(root,'workflow','next')).kind,'freeze');
     assert.equal((await json(root,'timing','check')).status,'PASS');
     assert.equal((await json(root,'visual','check')).status,'PASS');
     assert.equal((await json(root,'build','freeze','--confirm')).status,'READY');
@@ -115,23 +135,36 @@ async function exercise(kind){
       assert.equal((await json(root,'build','rehearse','--scene','overview','--allow-actions')).status,'PASS');
       assert.equal((await json(root,'build','freeze','--confirm')).status,'READY');
     }
-    const first=await json(root,'production','step','--allow-actions');
-    assert.equal(first.status,'EXECUTED');assert.equal(first.step.kind,'capture');assert.equal(first.next.kind,'voice');
-    const second=await json(root,'production','step');assert.equal(second.status,'EXECUTED');assert.equal(second.runId,first.runId);assert.equal(second.step.kind,'voice');
+    const first=await workflowDispatch(root,'capture','--allow-actions');assert.equal(first.next.kind,'voice');
+    if(kind==='dashboard'){
+      // Fault injection: emulate a crash after artifact persistence but before journal completion.
+      const file=path.join(root,'.avp','production',first.next.revision+'.json'),journal=readJson(file);
+      assert.equal(journal.events.at(-1).status,'EXECUTED');journal.events.pop();writeJson(file,journal);
+      const captureFile=path.join(sceneDir(root,'overview'),'capture.mp4'),before=fileHash(captureFile);
+      const interrupted=await observe(root,'workflow','next');assert.equal(interrupted.status,'RECOVERY_REQUIRED');
+      assert.equal((await observe(root,'production','step')).code,'EXPLICIT_RECOVERY_REQUIRED');
+      assert.equal((await observe(root,'production','step','--retry-failed')).code,'INTERRUPTED_STATE_REVIEW_REQUIRED');
+      assert.equal((await json(root,'production','step','--retry-failed','--confirm-reset')).status,'RECONCILED');
+      assert.equal(fileHash(captureFile),before);assert.equal(readJson(file).events.filter(e=>e.kind==='capture'&&e.status==='RUNNING').length,1);
+      assert.equal((await json(root,'telemetry')).currentProduction.totals.reconciled,1);
+    }
+    // Rehearsal proof alone never permits skipping real capture. All production media steps use the workflow.
     for(const scene of current.scenes){
-      const cap=scene.id==='overview'?{report:readJson(path.join(sceneDir(root,scene.id),'capture-report.json'))}:await json(root,'capture','--scene',scene.id);
-      assert.equal(cap.report.status,'PASS');
-      if(scene.id==='workflow'&&kind==='canvas')assert.ok(cap.report.actions.some(a=>a.type==='pointerPath'));
-      if(scene.id!=='overview')assert.equal((await json(root,'voice','--scene',scene.id)).reusedSelectedAudio,true);
-      await json(root,'captions','--scene',scene.id);await json(root,'preview','--scene',scene.id);
-      const qa=await json(root,'qa','--scene',scene.id);
+      if(scene.id!=='overview')await workflowDispatch(root,'capture','--allow-actions');
+      const cap=readJson(path.join(sceneDir(root,scene.id),'capture-report.json'));
+      assert.equal(cap.status,'PASS');
+      if(scene.id==='workflow'&&kind==='canvas')assert.ok(cap.actions.some(a=>a.type==='pointerPath'));
+      const voiced=await workflowDispatch(root,'voice');assert.equal(voiced.runId,first.runId);
+      await workflowDispatch(root,'captions');await workflowDispatch(root,'preview');await workflowDispatch(root,'qa');
+      const qa=readJson(path.join(sceneDir(root,scene.id),'qa-report.json'));
       assert.equal(qa.pass,true,JSON.stringify(qa));assert.equal(qa.checks.claimEvidence,true);
+      const checkpoint=await observe(root,'workflow','next');assert.equal(checkpoint.status,'REVIEW_REQUIRED');assert.equal(checkpoint.code,'SCENE_REVIEW');assert.equal(checkpoint.sceneId,scene.id);
       await cli(root,'approve','--stage','scene','--scene',scene.id);
     }
-    assert.equal((await json(root,'production','next')).kind,'render');
-    const rendered=await json(root,'production','step');assert.equal(rendered.status,'EXECUTED');assert.equal(rendered.step.kind,'render');
+    const rendered=await workflowDispatch(root,'render');assert.equal(rendered.step.kind,'render');
     assert.equal(rendered.next.code,'FINAL_REVIEW');await cli(root,'approve','--stage','final');
     assert.equal((await json(root,'production','next')).status,'COMPLETE');
+    assert.equal((await json(root,'workflow','next')).status,'COMPLETE');
     const unchanged=sceneDir(root,'overview'),changed=sceneDir(root,'workflow');
     const keep=['capture.mp4','voice.wav','preview.mp4','qa-report.json'].map(n=>fileHash(path.join(unchanged,n)));
     const keepChanged=['capture.mp4','voice.wav'].map(n=>fileHash(path.join(changed,n)));
@@ -212,8 +245,9 @@ test('managed Node lifecycle is used by actual rehearsal and capture',{skip:proc
     assert.equal(report.appSession.manifestHash,status.manifestHash);
     assert.equal(report.status,'PASS');
     await assert.rejects(fetch(config.appUrl,{signal:AbortSignal.timeout(1000)}));
-    await json(root,'production','step');await json(root,'production','step');
-    const qa=await json(root,'production','step');assert.equal(qa.step.kind,'qa');assert.equal(qa.status,'EXECUTED');
-    assert.equal((await json(root,'production','step')).next.status,'COMPLETE');
+    await workflowDispatch(root,'captions');await workflowDispatch(root,'preview');
+    const qa=await workflowDispatch(root,'qa');assert.equal(qa.step.kind,'qa');
+    assert.equal((await workflowDispatch(root,'render')).next.status,'COMPLETE');
+    assert.equal((await json(root,'workflow','next')).status,'COMPLETE');
   }finally{if(portServer.listening)await new Promise(r=>portServer.close(r));fs.rmSync(root,{recursive:true,force:true});}
 });

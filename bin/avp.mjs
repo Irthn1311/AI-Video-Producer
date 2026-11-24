@@ -17,6 +17,7 @@ import {prepareBuild,checkBuild,freezeBuild,requireBuildGate,requiresBuild} from
 import {rehearseScene} from '../src/rehearsal.mjs';
 import {creativeStatus,approveCreative} from '../src/creative-director.mjs';
 import {storyboardContext,checkStoryboardProposal,applyStoryboardProposal} from '../src/agent-storyboard.mjs';
+import {auditionVoice,importAudition,listAuditions,chooseAudition,evaluateTiming} from '../src/voice-timing.mjs';
 const apiSession={calls:0};
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 function usage(){console.log(`AI Video Producer v0.1 (local-first, software-demo)
@@ -37,6 +38,11 @@ Usage: avp <command> [--project DIR] [--scene ID] [options]
     --profile economy|balanced|quality (override project profile)
   plan [--force]             Write planning drafts (preserve edits unless forced)
   evidence                   Inspect coverage + claim evidence status (local-only)
+  timing audition --scene ID --allow-paid-api [--force]  Generate/cache full-scene audition
+  timing import --scene ID --file AUDIO --confirm   Import authorized full-scene narration
+  timing list --scene ID     List current voice candidates
+  timing select --scene ID --hash HASH --confirm  Select exact reviewed audio
+  timing check               Check measured voice/action timing (no API calls)
   storyboard context          Return bounded research context for agent-authored scenes
   storyboard check            Validate local proposal and preview scene diff (no actions)
   storyboard apply --hash HASH --confirm  Apply reviewed proposal to canonical project.json
@@ -130,6 +136,16 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
       throw Error('Use adapters init|status|approve|trial; see docs/project-adapters.md');
     }
     case 'evidence':console.log(JSON.stringify(inspectEvidence(root,config,state,{isCaptureStale:scene=>staleParts(scene,config,sceneState(state,scene.id),root).capture}),null,2));break;
+    case 'timing':{
+      const op=args._[1]||'check';
+      if(op==='check'){const result=evaluateTiming(root,config);console.log(JSON.stringify(result,null,2));if(result.status==='BLOCKED')process.exitCode=2;break;}
+      const scene=chooseScene(config,args);
+      if(op==='audition'){console.log(JSON.stringify(await auditionVoice(root,config,scene,state,{allowPaidApi:args['allow-paid-api']===true,force:args.force===true,budgetSession:apiSession}),null,2));break;}
+      if(op==='import'){console.log(JSON.stringify(importAudition(root,config,scene,{file:args.file,confirm:args.confirm===true}),null,2));break;}
+      if(op==='list'){console.log(JSON.stringify(listAuditions(root,config,scene),null,2));break;}
+      if(op==='select'){console.log(JSON.stringify(chooseAudition(root,config,scene,state,{hash:args.hash,confirm:args.confirm===true}),null,2));break;}
+      throw Error('Use timing audition|import|list|select|check');
+    }
     case 'storyboard':{
       const op=args._[1]||'context';
       if(op==='context'){console.log(JSON.stringify(storyboardContext(root,config),null,2));break;}

@@ -2,12 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {run,readJson,writeJson,sceneDir,avpDir,loadEnv,sha,atomicWrite,fileHash} from './utils.mjs';
-import {recordArtifact,inputHashes,sceneState,saveState,requireUnlocked,staleParts,gate,validateSceneQa,sceneApprovalValid,finalInputHash, invalidateOutput,reservePaidCall} from './state.mjs';
+import {recordArtifact,inputHashes,sceneState,saveState,requireUnlocked,staleParts,gate,validateSceneQa,sceneApprovalValid,finalInputHash, invalidateOutput} from './state.mjs';
 import {captureEvidencePassed} from './capture-assertions.mjs';
 import {executeCaptureAction,locator} from './capture-actions.mjs';
 import {adapterActions,requireAdapterReady,protectAdapterBrowser} from './adapters.mjs';
 import {verificationMode,verifySceneClaims,requireCoveragePlan} from './evidence.mjs';
 import {sentenceParts,measureSpeech,alignNarration,validateCaptionRows} from './audio-timing.mjs';
+import {loadVoiceEnvironment,synthesizeVoice} from './voice-provider.mjs';
+import {timingEnabled,selectedVoice} from './voice-selection.mjs';
 const seconds=(value)=>Number(value||0);
 export function probe(file){return JSON.parse(run('ffprobe',['-v','error','-show_format','-show_streams','-of','json',file]));}
 export function mediaSeconds(file){return seconds(probe(file).format?.duration);}
@@ -40,25 +42,27 @@ export async function capture(root,config,scene,state,opts={}){
     try{if(ctx){const pages=ctx.pages();if(pages.length){const file=path.join(dir,'capture-failure.png');await pages[0].screenshot({path:file,timeout:6000});report.failureScreenshot='capture-failure.png';}}}catch{}
     writeJson(path.join(dir,'capture-report.json'),report);throw e;}finally{if(ctx)await ctx.close();await browser.close();}
 }
-function wavFromPcm(pcm,sampleRate=24000){const b=Buffer.alloc(44);b.write('RIFF',0);b.writeUInt32LE(pcm.length+36,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(sampleRate,24);b.writeUInt32LE(sampleRate*2,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(pcm.length,40);return Buffer.concat([b,pcm]);}
 export async function voice(root,config,scene,state,opts={}){
   if(config.voiceover?.enabled===false)return {skipped:'disabled'};
-  if(config.voiceover?.provider!=='gemini')throw Error('v0.1 includes Gemini TTS adapter only; other providers are extension points.');
-  requireUnlocked(state,scene.id);let ss=sceneState(state,scene.id),h=inputHashes(scene,config,sceneState(state,scene.id),root);if(!staleParts(scene,config,ss,root).voice&&!opts.force)return {reused:true};
-  if(!opts.allowPaidApi)throw Error('Voice generation may incur cost. Add --allow-paid-api after verifying provider pricing and script.');
-  loadEnv(path.resolve(import.meta.dirname,'..'));loadEnv(root);const key=process.env.GEMINI_API_KEY;if(!key)throw Error('GEMINI_API_KEY missing; copy .env.example to .env and set key locally.');
-  const dir=sceneDir(root,scene.id);fs.mkdirSync(dir,{recursive:true});const model=process.env.GEMINI_TTS_MODEL||config.voiceover.model||'gemini-2.5-flash-preview-tts';
-  let v=config.voiceover.voice||'Charon';const lang=config.language?.narration||'en-US';const text=`Speak in ${lang}. ${config.voiceover.style||'Clear and conversational'}. Read only the following: ${scene.narration}`;
-  const body={contents:[{parts:[{text}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:v}}}}};
-  const budgetReservation=reservePaidCall(root,state,config,opts.budgetSession,config.voiceover?.estimatedUsdPerCall);
-  const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify(body),signal:AbortSignal.timeout(120000)});
-  if(!response.ok())throw Error(`Gemini TTS returned HTTP ${response.status} (response contents withheld)`);
-  const json=await response.json();const part=json.candidates?.[0]?.content?.parts?.find(p=>p.inlineData?.data);if(!part)throw Error('TTS response contains no audio');const mime=part.inlineData.mimeType||'';
-  if(!/audio\/(L16|pcm)/i.test(mime))throw Error(`Unsupported raw TTS audio mime type: ${mime}`);
-  const rate=Number(mime.match(/rate=(\d+)/i)?.[1]||24000);const pcm=Buffer.from(part.inlineData.data,'base64');if(pcm.length<100||pcm.length%2)throw Error('Invalid PCM audio response');
-  const out=path.join(dir,'voice.wav');atomicWrite(out,wavFromPcm(pcm,rate));recordArtifact(root,state,scene,'voice',out,h.voice);
-  writeJson(path.join(dir,'voice-report.json'),{provider:'gemini',model,voice:v,language:lang,durationSec:mediaSeconds(out),contentHash:sha(scene.narration),generatedAt:new Date().toISOString(),humanListeningApproved:false});
-  return {file:out,durationSec:mediaSeconds(out),budgetReservation};
+  requireUnlocked(state,scene.id);
+  loadVoiceEnvironment(root);
+  const ss=sceneState(state,scene.id),h=inputHashes(scene,config,ss,root);
+  if(!staleParts(scene,config,ss,root).voice&&!opts.force)return {reused:true};
+  const out=path.join(sceneDir(root,scene.id),'voice.wav');
+  if(timingEnabled(config)){
+    const chosen=selectedVoice(root,config,scene);
+    if(!chosen)throw Error('Selected Build narration is missing; run timing select before Production');
+    atomicWrite(out,fs.readFileSync(chosen.audio));
+    recordArtifact(root,state,scene,'voice',out,h.voice);
+    writeJson(path.join(sceneDir(root,scene.id),'voice-report.json'),{provider:chosen.receipt.origin,
+      durationSec:chosen.receipt.durationSec,contentHash:sha(scene.narration),selectionHash:chosen.selectionHash,
+      generatedAt:new Date().toISOString(),humanListeningApproved:true});
+    return {file:out,durationSec:chosen.receipt.durationSec,reusedSelectedAudio:true};
+  }
+  const generated=await synthesizeVoice(root,config,scene,state,opts);
+  atomicWrite(out,generated.wav);recordArtifact(root,state,scene,'voice',out,h.voice);
+  writeJson(path.join(sceneDir(root,scene.id),'voice-report.json'),{provider:'gemini',model:generated.request.model,voice:generated.request.voice,language:generated.request.language,durationSec:mediaSeconds(out),contentHash:sha(scene.narration),generatedAt:new Date().toISOString(),humanListeningApproved:false});
+  return {file:out,durationSec:mediaSeconds(out),budgetReservation:generated.budgetReservation};
 }
 const stamp=t=>{let ms=Math.round(t*1000);const h=Math.floor(ms/3600000);ms%=3600000;const m=Math.floor(ms/60000);ms%=60000;const s=Math.floor(ms/1000);return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+','+String(ms%1000).padStart(3,'0');};
 export function captions(root,config,scene,state,opts={}){

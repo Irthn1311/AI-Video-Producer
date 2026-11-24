@@ -13,3 +13,6 @@ Produce artifacts or evidence in the project `.avp/` directory where relevant; k
 
 ## Real audio timing
 After obtaining the audio, consult `docs/audio-captions.md`. The local captions stage uses measured silence spans by default for speech. Review real audio and optionally add per-sentence `captionTiming.anchors` if the automatic sentence association is uncertain. Never regenerate costly TTS just to revise captions or camera timing.
+
+## Build-time audition and timing (opt-in)
+Read `docs/voice-timing.md`. Resolve actual voiceover.voice/style/language and pronunciation instructions before full-scene audition; free-text creative direction alone does not change TTS. Use `avp timing audition` only with paid permission, or import authorized exact narration. Listen and select the exact candidate hash; never claim listening verification from amplitude analysis. Compare current browser rehearsal duration and selected audio, revise the storyboard if infeasible. Production reuses selected audio instead of synthesizing again.

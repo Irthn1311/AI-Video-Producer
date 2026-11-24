@@ -45,13 +45,14 @@ const Camera:React.FC<{shot:MediaShot;theme:Theme}>=({shot,theme})=>{
   </AbsoluteFill>;
 };
 const CaptionLayer:React.FC<{captions:Caption[];theme:Theme}>=({captions,theme})=>{
-  const frame=useCurrentFrame(),{fps}=useVideoConfig();
+  const frame=useCurrentFrame(),{fps,width,height}=useVideoConfig();
+  const fontSize=Math.max(12,Math.min(width*.035,height*.045));
   const ms=frame/fps*1000;
   const row=captions.find(c=>ms>=c.startMs&&ms<c.endMs);
   if(!row)return null;
   return <div style={{position:'absolute',left:'6%',right:'6%',bottom:'7%',display:'flex',justifyContent:'center',pointerEvents:'none'}}>
-    <div style={{maxWidth:'90%',padding:'12px 22px',borderRadius:12,background:theme.panel,
-      color:theme.text,fontSize:32,fontWeight:600,lineHeight:1.4,textAlign:'center',whiteSpace:'pre-wrap'}}>{row.text}</div>
+    <div style={{maxWidth:'94%',padding:`${Math.max(4,fontSize*.35)}px ${Math.max(8,fontSize*.65)}px`,borderRadius:Math.max(5,fontSize*.35),background:theme.panel,
+      color:theme.text,fontSize,fontWeight:600,lineHeight:1.4,textAlign:'center',whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{row.text}</div>
   </div>;
 };
 const Chapter:React.FC<{label:string;theme:Theme}>=({label,theme})=><div style={{

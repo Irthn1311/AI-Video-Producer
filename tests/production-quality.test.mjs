@@ -1,0 +1,37 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {qualityPolicy,captionReadability} from '../src/quality-policy.mjs';
+import {markerTimeline,evidenceTimeline,masterVoice} from '../src/production-quality.mjs';
+import {run,fileHash,sceneDir,readJson} from '../src/utils.mjs';
+test('quality policy is opt-in and readable Unicode cues must match script',()=>{
+  assert.equal(qualityPolicy({}),null);assert.throws(()=>qualityPolicy({productionQuality:{targetLufs:0}}));
+  const p=qualityPolicy({productionQuality:{}});
+  assert.equal(captionReadability([{text:'Xin chào.',startMs:0,endMs:1000}],'Xin chào.',p).pass,true);
+  assert.equal(captionReadability([{text:'Xin chào.',startMs:0,endMs:100}],'Xin chào.',p).pass,false);
+  assert.equal(captionReadability([{text:'Sai.',startMs:0,endMs:1000}],'Xin chào.',p).pass,false);
+});
+test('measured action markers and conservative evidence coverage reject deleted/reordered footage',()=>{
+  const scene={featureIds:['result']};
+  const actions=[{type:'goto'},{type:'assertText',evidenceId:'result'}];
+  const m=markerTimeline({actions:[{index:0,type:'goto',startMs:20,endMs:100},{index:1,type:'assertText',evidenceId:'result',startMs:120,endMs:900}]},actions);
+  assert.equal(m.pass,true);
+  const shot={file:'footage/capture.mp4',trimBefore:0,playFrames:48,playbackRate:1,transitionInFrames:0};
+  assert.equal(evidenceTimeline(scene,m,{shots:[shot]},2,2,24).pass,true);
+  assert.equal(evidenceTimeline(scene,m,{shots:[{...shot,trimBefore:24}]},2,2,24).pass,false);
+  assert.equal(evidenceTimeline(scene,m,{shots:[{...shot,playFrames:12}]},2,2,24).pass,false);
+  assert.equal(markerTimeline({actions:[]},actions).pass,false);
+});
+test('gain-only mastering preserves source bytes and duration, caches measured result',{timeout:60000},()=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'avp-master-'));
+  try{
+    const scene={id:'sample'},config={productionQuality:{},voiceover:{enabled:true}},dir=sceneDir(root,scene.id);
+    fs.mkdirSync(dir,{recursive:true});const src=path.join(dir,'voice.wav');
+    run('ffmpeg',['-y','-v','error','-f','lavfi','-i','sine=frequency=440:duration=3','-c:a','pcm_s16le',src]);
+    const before=fileHash(src),master=masterVoice(root,config,scene),receipt=readJson(path.join(dir,'voice-master.json'));
+    assert.equal(receipt.pass,true);assert.equal(fileHash(src),before);assert.ok(Math.abs(receipt.sourceSec-receipt.outputSec)<=.05);
+    const hash=fileHash(master);assert.equal(masterVoice(root,config,scene),master);assert.equal(fileHash(master),hash);
+  }finally{fs.rmSync(root,{recursive:true,force:true});}
+});

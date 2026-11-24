@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {run,readJson,writeJson,avpDir,sceneDir} from './utils.mjs';
 import {compileSceneEdit,editAssetNames} from './editing.mjs';
+import {masterVoice} from './production-quality.mjs';
+import {qualityPolicy} from './quality-policy.mjs';
 
 function seconds(file){
   const data=JSON.parse(run('ffprobe',['-v','error','-show_entries','format=duration','-of','json',file]));
@@ -29,7 +31,7 @@ export async function renderEditedPreview(root,config,scene){
   const hasVoice=config.voiceover?.enabled!==false;
   const voiceFile=path.join(dir,'voice.wav');
   if(hasVoice){if(!fs.existsSync(voiceFile))throw Error('Voice missing for Remotion edited preview');
-    fs.copyFileSync(voiceFile,path.join(publicDir,'voice.wav'));}
+    fs.copyFileSync(qualityPolicy(config)?masterVoice(root,config,scene):voiceFile,path.join(publicDir,'voice.wav'));}
   const captionsFile=path.join(dir,'captions.json');
   const captions=fs.existsSync(captionsFile)?readJson(captionsFile).rows:[];
   const fps=config.render?.fps||30;
@@ -56,6 +58,9 @@ export async function renderEditedPreview(root,config,scene){
           '-t',String(plan.durationInFrames/fps),'-movflags','+faststart',muxed]);
         fs.renameSync(muxed,path.join(dir,'preview.mp4'));
       }finally{fs.rmSync(muxed,{force:true});}
+    }else if(qualityPolicy(config)){
+      const muxed=path.join(dir,'preview.quality.new.mp4');
+      try{run('ffmpeg',['-y','-nostdin','-v','error','-i',staged,'-c:v','copy','-c:a','aac','-ar','48000','-ac','2','-b:a','160k','-movflags','+faststart',muxed]);fs.renameSync(muxed,path.join(dir,'preview.mp4'));}finally{fs.rmSync(muxed,{force:true});}
     }else fs.renameSync(staged,path.join(dir,'preview.mp4'));
   }finally{fs.rmSync(staged,{force:true});}
   return {file:path.join(dir,'preview.mp4'),duration:plan.durationInFrames/fps,

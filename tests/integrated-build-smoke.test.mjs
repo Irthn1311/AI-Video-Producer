@@ -46,6 +46,7 @@ async function exercise(kind){
     config.title=kind==='canvas'?'Drawing editor':'Inventory dashboard';
     config.appUrl='http://127.0.0.1:'+server.address().port;config.sourcePath='app';
     config.workflow={requireBuild:true};config.voiceover.enabled=true;config.review.mode='review';
+    config.productionQuality={maxCaptionCps:32};
     config.render={engine:'ffmpeg',width:640,height:360,fps:24,captionsBurned:true};
     config.creative={audience:'product reviewers',goal:'Show a real interaction and result',
       director:{mode:'interactive',visualStyle:'clean',maxDurationSec:20},
@@ -158,6 +159,7 @@ async function exercise(kind){
       await workflowDispatch(root,'captions');await workflowDispatch(root,'preview');await workflowDispatch(root,'qa');
       const qa=readJson(path.join(sceneDir(root,scene.id),'qa-report.json'));
       assert.equal(qa.pass,true,JSON.stringify(qa));assert.equal(qa.checks.claimEvidence,true);
+      assert.equal(qa.quality.semanticStatus,'NOT_EVALUATED');assert.ok(qa.quality.frames.length>0);assert.equal(qa.checks.audioQuality,true);assert.equal(qa.checks.evidenceTimeline,true);
       const checkpoint=await observe(root,'workflow','next');assert.equal(checkpoint.status,'REVIEW_REQUIRED');assert.equal(checkpoint.code,'SCENE_REVIEW');assert.equal(checkpoint.sceneId,scene.id);
       await cli(root,'approve','--stage','scene','--scene',scene.id);
     }
@@ -165,6 +167,8 @@ async function exercise(kind){
     assert.equal(rendered.next.code,'FINAL_REVIEW');await cli(root,'approve','--stage','final');
     assert.equal((await json(root,'production','next')).status,'COMPLETE');
     assert.equal((await json(root,'workflow','next')).status,'COMPLETE');
+    const finalAudit=readJson(path.join(root,'.avp','output','final-report.json'));assert.equal(finalAudit.sceneTimeline.length,2);assert.equal(finalAudit.sceneTimeline[0].startMs,0);assert.ok(finalAudit.sceneTimeline[1].startMs>0);
+    assert.equal(finalAudit.semanticReview,'NOT_EVALUATED_BY_AUTOMATION');assert.equal(finalAudit.actualBilledUsd,null);
     const unchanged=sceneDir(root,'overview'),changed=sceneDir(root,'workflow');
     const keep=['capture.mp4','voice.wav','preview.mp4','qa-report.json'].map(n=>fileHash(path.join(unchanged,n)));
     const keepChanged=['capture.mp4','voice.wav'].map(n=>fileHash(path.join(changed,n)));
@@ -219,7 +223,7 @@ test('managed Node lifecycle is used by actual rehearsal and capture',{skip:proc
     fs.mkdirSync(path.join(root,'app'));
     fs.writeFileSync(path.join(root,'app','server.mjs'),`import http from 'node:http';http.createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end('<h1>Managed fixture</h1>');}).listen(Number(process.env.PORT),process.env.HOST);`);
     const config=readJson(path.join(repo,'templates','project.json'));config.sourcePath='app';config.appUrl='http://127.0.0.1:'+port;
-    config.workflow={requireBuild:true};config.review.mode='autonomous';config.voiceover.enabled=false;
+    config.workflow={requireBuild:true};config.review.mode='autonomous';config.voiceover.enabled=false;config.productionQuality={};
     config.render={engine:'ffmpeg',width:320,height:180,fps:24,captionsBurned:false};
     config.appRuntime={mode:'managed-node',entrypoint:'server.mjs',readinessPath:'/',startupTimeoutMs:5000,reset:'fresh-process',isolation:'operator-approved-disposable-local-fixture'};
     config.scenes=[{id:'managed',title:'Managed fixture',durationSec:2,featureIds:['heading'],narration:'Managed fixture.',

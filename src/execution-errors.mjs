@@ -49,7 +49,7 @@ export function failureDetails(error,kind){
   if(Number.isInteger(d.actionIndex)&&d.actionIndex>=0&&d.actionIndex<10000)metadata.actionIndex=d.actionIndex;
   if(Number.isInteger(d.httpStatus)&&d.httpStatus>=100&&d.httpStatus<=599)metadata.httpStatus=d.httpStatus;
   if(['ffmpeg','ffprobe'].includes(d.tool))metadata.tool=d.tool;
-  if(Array.isArray(d.failedChecks))metadata.failedChecks=d.failedChecks.filter(x=>['captionTimeline','videoH264','width','height','audioAAC','duration','captionsExist','fullDecode','captureAssertions','claimEvidence'].includes(x));
+  if(Array.isArray(d.failedChecks))metadata.failedChecks=d.failedChecks.filter(x=>['captionTimeline','videoH264','width','height','audioAAC','duration','captionsExist','fullDecode','captureAssertions','claimEvidence','actionMarkers','evidenceTimeline','captionReadability','audioQuality','reviewFrames'].includes(x));
   return {code,disposition,action,metadata,
     retrySameRevision:disposition!=='RETURN_TO_BUILD'&&disposition!=='INSPECT_QA',
     automaticRetry:false};

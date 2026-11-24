@@ -174,6 +174,8 @@
 
 ## B2. Audio, Storytelling & Visual Composition — P1
 
+> **F-06 integrated candidate (PARTIAL; CI pending):** opt-in production quality policy, capture action markers, gain-only duration-preserving master/cache, Unicode script/readability checks, resolution-aware Remotion captions, conservative continuous evidence timeline, hash-bound representative review frames and final global SRT/audit, optional H.264 export CRF. No ASR, semantic agent evaluator, guaranteed frame-exact evidence, music, crossfade/transition handles, release version lock or external quality benchmark. See `docs/production-quality.md`.
+
 - [x] `B2-01` AVP có voice theo scene (Gemini adapter), audio cache theo input, captions và đường dựng preview.
 - [x] `B2-02` Scene edit có trim, zoom/focus, playback speed, hold, inset và callout; bản edited preview được QA trước khi final concat.
 - [ ] `B2-03` **PARTIAL** Audio production hoàn chỉnh: trim silence có kiểm soát, lead-in/out, intentional pauses, loudness normalization, clipping/noise QA, voice quality review, retry khi provider lỗi.

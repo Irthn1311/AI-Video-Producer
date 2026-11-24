@@ -98,10 +98,10 @@ test('default strict demo captures two real browser scenes, binds claims, and re
     // Previously approved video cannot bypass tampering with proof after QA.
     const evidenceFile=path.join(sceneDir(root,config.scenes[0].id),'capture-report.json');
     const changed=readJson(evidenceFile);changed.assertions[0].pass=false;writeJson(evidenceFile,changed);
-    const blocked=spawnSync(process.execPath,[path.join(repo,'bin','avp.mjs'),'render','--project',root],
+    const blockedFinal=spawnSync(process.execPath,[path.join(repo,'bin','avp.mjs'),'render','--project',root],
       {encoding:'utf8',timeout:10000});
-    assert.notEqual(blocked.status,0);
-    assert.match(blocked.stderr,/evidence|QA|stale/i);
+    assert.notEqual(blockedFinal.status,0);
+    assert.match(blockedFinal.stderr,/evidence|QA|stale/i);
     // Mutating the locked production plan cannot be used for a new capture.
     const planFile=path.join(root,'.avp','build','production-plan.json');
     const modified=readJson(planFile);modified.scenes[0].captureRecipe.actions[0].path='/wrong';

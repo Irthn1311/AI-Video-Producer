@@ -14,6 +14,7 @@ import {evaluateTiming} from './voice-timing.mjs';
 import {timingEnabled} from './voice-selection.mjs';
 import {shotIds} from './editing.mjs';
 import {visualStatus} from './visual-direction.mjs';
+import {appStatus,managedApp} from './app-runtime.mjs';
 
 const SCHEMA=1;
 const files=['project-profile','feature-inventory','capability-profile','toolchain-lock',
@@ -74,6 +75,7 @@ function makeArtifacts(root,config){
     appUrl:config.appUrl,analysisLevel:analysis.analysisLevel,
     projectIntelligenceHash:sha(analysis),
     technology:analysis.technology,runtime:analysis.runtime,
+    ...(managedApp(config)?{appRuntime:appStatus(root,config)}:{}),
     detectedRoutes:analysis.routes,capabilitySignals:analysis.capabilitySignals,
     inspectedSource:analysis.scanned,
     fileCount:inventory.fileCount,importantFiles:inventory.important,
@@ -351,7 +353,9 @@ export function checkBuild(root,config,state,{forFreeze=false}={}){
   const planning=checkPlanning(root,config,state);
   const timing=evaluateTiming(root,config);
   const visual=visualStatus(config);
+  const app=appStatus(root,config);
   const problems=[...a.problems,...rehearsal.problems,...planning.problems,...storyboardGate(config,a.sourceHash),...timing.problems,...visual.problems];
+  if(managedApp(config)&&app.status!=='TRIAL_PASS')problems.push(issue('APP_RUNTIME_NOT_READY','Managed app requires reviewed manifest and successful local launch/cleanup trial','Run avp app status, app approve --hash HASH --confirm, app trial --allow-launch; reprepare Build'));
   const reviews=[...planning.review];
   const creative=creativeStatus(root,config,{sourceHash:a.sourceHash});
   if(creative.status==='BLOCKED')problems.push(...creative.issues);
@@ -365,7 +369,7 @@ export function checkBuild(root,config,state,{forFreeze=false}={}){
     projectConfigHash:a.configHash,sourceFingerprint:a.sourceHash,
     problems,reviewRequired:reviews,warnings:a.warnings,
     creative:{status:creative.status,briefHash:creative.briefHash||null},
-    timing,visual,
+    timing,visual,appRuntime:app,
     stages:{
       intake:a.problems.some(x=>x.code.startsWith('BUILD_SOURCE')||x.code.startsWith('BUILD_CONFIG'))?'BLOCKED':'PASS',
       capabilityMatching:a.problems.some(x=>x.code.includes('TOOL')||x.code.includes('ACTION')||x.code.includes('ADAPTER'))?'BLOCKED':'PASS',
@@ -399,7 +403,7 @@ export function freezeBuild(root,config,state){
     sceneCount:config.scenes.length,buildLock:file(root,'build-lock')};
 }
 export function requiresBuild(root,config){
-  return config.creative?.visual!==undefined||timingEnabled(config)||config.creative?.storyboard!==undefined||config.creative?.director!==undefined||config.workflow?.requireBuild===true||exists(file(root,'build-state'));
+  return managedApp(config)||config.creative?.visual!==undefined||timingEnabled(config)||config.creative?.storyboard!==undefined||config.creative?.director!==undefined||config.workflow?.requireBuild===true||exists(file(root,'build-state'));
 }
 /** Legacy projects remain compatible until they opt into Build or are initialized with it. */
 export function requireBuildGate(root,config,state){

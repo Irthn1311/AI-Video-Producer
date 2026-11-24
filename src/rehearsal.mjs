@@ -4,6 +4,7 @@ import {avpDir,writeJson,sha} from './utils.mjs';
 import {inputHashes} from './state.mjs';
 import {executeCaptureAction} from './capture-actions.mjs';
 import {adapterActions,requireAdapterReady,protectAdapterBrowser} from './adapters.mjs';
+import {withAppRuntime} from './app-runtime.mjs';
 
 export function rehearsalPath(root,sceneId){
   return path.join(avpDir(root),'build','rehearsals',sceneId+'.json');
@@ -14,7 +15,11 @@ export function rehearsalPath(root,sceneId){
  * execute, but WITHOUT recording a video, generating voice, or changing scene QA.
  * User must explicitly authorize running potentially state-mutating UI actions.
  */
-export async function rehearseScene(root,config,scene,{allowActions=false}={}){
+export async function rehearseScene(root,config,scene,opts={}){
+  try{return await withAppRuntime(root,config,opts,session=>rehearseCore(root,config,scene,{...opts,appSession:session}));}
+  catch(e){if(config.appRuntime!==undefined)fs.rmSync(rehearsalPath(root,scene.id),{force:true});throw e;}
+}
+async function rehearseCore(root,config,scene,{allowActions=false,appSession=null}={}){
   const adapterProof=requireAdapterReady(root,config,scene);
   const effectiveActions=adapterActions(root,config,scene);
   if(!allowActions)throw Error('Rehearsal interacts with the app. Add --allow-actions for an authorized isolated demo/test environment.');
@@ -25,6 +30,7 @@ export async function rehearseScene(root,config,scene,{allowActions=false}={}){
   const record={
     schemaVersion:1,sceneId:scene.id,scope:'BUILD_REHEARSAL_ONLY',status:'RUNNING',
     captureInputHash:fingerprint,actionsHash:sha(effectiveActions),
+    ...(appSession?{appSession}:{}),
     adapter:adapterProof?{id:adapterProof.id,manifestHash:adapterProof.manifestHash,receiptHash:adapterProof.receiptHash}:null,
     startedAt:new Date().toISOString(),actions:[],assertions:[],pageErrors:[],
     caution:'Rehearsal is not evidence of the footage produced later.'

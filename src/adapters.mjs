@@ -5,6 +5,7 @@ import {sourceFingerprint} from './inspect.mjs';
 import {validateCaptureEvidenceConfig} from './capture-assertions.mjs';
 import {executeCaptureAction} from './capture-actions.mjs';
 import {validatePointerPath,hasPointerTransition} from './pointer-actions.mjs';
+import {withAppRuntime,appRuntimeFingerprint} from './app-runtime.mjs';
 
 const MAX_ACTIONS=50;
 const allowedActions=new Set(['goto','click','fill','hover','waitFor','pause','scroll',
@@ -213,6 +214,7 @@ function reportPass(root,config,scene,approvalHash,manifestHash,manifest){
     report.adapterId!==id||report.manifestHash!==manifestHash||report.approvalHash!==approvalHash||
     report.sourceFingerprint!==sourceFingerprint(root,config)||
     report.appOrigin!==loopbackOrigin(config.appUrl)||report.resetPassed!==true||
+    (config.appRuntime!==undefined&&report.appSession?.manifestHash!==appRuntimeFingerprint(root,config))||
     !Array.isArray(report.assertions)||!report.assertions.length||report.assertions.some(a=>a.pass!==true)||
     (report.pageErrors||[]).length>0||receipt.schemaVersion!==1||
     receipt.reportHash!==fileHash(reportFile)||receipt.manifestHash!==manifestHash||
@@ -274,7 +276,11 @@ function installBrowserOriginGuard(context,appOrigin,record){
   });
 }
 /** Trial a reviewed declarative recipe in an isolated browser context. No JS/script execution from adapter. */
-export async function trialAdapter(root,config,scene,{allowActions=false}={}){
+export async function trialAdapter(root,config,scene,opts={}){
+  try{return await withAppRuntime(root,config,opts,session=>trialAdapterCore(root,config,scene,{...opts,appSession:session}));}
+  catch(e){if(config.appRuntime!==undefined&&scene.capture?.adapter)fs.rmSync(receiptPath(root,scene.capture.adapter),{force:true});throw e;}
+}
+async function trialAdapterCore(root,config,scene,{allowActions=false,appSession=null}={}){
   if(allowActions!==true)throw Error('Adapter trial requires explicit --allow-actions (use disposable local test data)');
   const {data,hash}=ensureManifest(root,config,scene),approval=currentApproval(root,config,scene,hash);
   let chromium;try{({chromium}=await import('@playwright/test'));}
@@ -282,7 +288,8 @@ export async function trialAdapter(root,config,scene,{allowActions=false}={}){
   const record={schemaVersion:1,status:'RUNNING',scope:'ADAPTER_BROWSER_TRIAL_NOT_PRODUCTION_EVIDENCE',
     adapterId:data.id,sceneId:scene.id,manifestHash:hash,approvalHash:approval.hash,
     sourceFingerprint:sourceFingerprint(root,config),appOrigin:data.appOrigin,
-    engineHash:engineHash(),actionsHash:sha(data.actions),startedAt:new Date().toISOString(),
+    engineHash:engineHash(),actionsHash:sha(data.actions),
+    ...(appSession?{appSession}:{}),startedAt:new Date().toISOString(),
     blockedExternalRequests:0,actions:[],assertions:[],pageErrors:[],resetPassed:false,
     warning:'Fresh browser context + same-origin routing is NOT an OS sandbox; app server may make external calls.'};
   const trialFile=reportPath(root,data.id),sealFile=receiptPath(root,data.id);

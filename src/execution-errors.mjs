@@ -1,6 +1,13 @@
 // Typed, bounded failure metadata. Never serialize arbitrary error messages,
 // stack traces, locators, response bodies, app URLs or credentials into journals.
 const policies={
+  APP_RUNTIME_REVIEW_REQUIRED:['RETURN_TO_BUILD','Review the managed runtime and complete a current launch trial.'],
+  APP_LAUNCH_AUTHORIZATION_REQUIRED:['CHECK_AUTHORIZATION','Explicitly authorize reviewed disposable app launch and interaction.'],
+  APP_PORT_OCCUPIED:['CHECK_ENVIRONMENT','Inspect occupied port; never kill an unrelated process.'],
+  APP_RUNTIME_BUSY:['CHECK_ENVIRONMENT','Inspect existing managed session and confirm cleanup before further launch.'],
+  APP_START_FAILED:['CHECK_ENVIRONMENT','Inspect reviewed entrypoint and local dependencies; verify safe fixture state.'],
+  APP_READINESS_TIMEOUT:['CHECK_ENVIRONMENT','Verify local startup and readiness contract before retry.'],
+  APP_CLEANUP_FAILED:['CHECK_ENVIRONMENT','Inspect direct child and retained session lock; do not relaunch until cleanup confirmed.'],
   ASSERTION_FAILED:['RETURN_TO_BUILD','Re-observe the exact UI/API result; repair recipe or claim, rehearse and freeze again. Do not weaken assertions to pass.'],
   LOCATOR_OR_INTERACTION_FAILED:['RETURN_TO_BUILD','Inspect authorized app DOM and state; repair action/adapter and rehearse before new freeze.'],
   APP_NAVIGATION_FAILED:['CHECK_ENVIRONMENT','Check app availability, origin and isolated test state; authorize retry only after reset.'],

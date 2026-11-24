@@ -10,6 +10,7 @@ import {timingEnabled} from './voice-selection.mjs';
 import {ExecutionError,failureDetails,interruptedFailure} from './execution-errors.mjs';
 import {verificationMode,verifySceneClaims} from './evidence.mjs';
 import {captureEvidencePassed} from './capture-assertions.mjs';
+import {managedApp} from './app-runtime.mjs';
 
 const dir=root=>path.join(avpDir(root),'production');
 const mutex=root=>path.join(dir(root),'executor.lock');
@@ -125,7 +126,7 @@ export function recoverProduction(root,{confirm=false}={}){
 async function dispatch(root,config,state,next,opts){
   const s=config.scenes.find(x=>x.id===next.sceneId);
   switch(next.kind){
-    case 'capture':return capture(root,config,s,state);
+    case 'capture':return capture(root,config,s,state,{allowLaunch:opts.allowLaunch,allowActions:opts.allowActions});
     case 'voice':return voice(root,config,s,state,{allowPaidApi:opts.allowPaidApi,budgetSession:{calls:0}});
     case 'captions':return captions(root,config,s,state);
     case 'preview':return preview(root,config,s,state);
@@ -158,6 +159,7 @@ export async function productionStep(root,opts={}){
     }
     if(next.status!=='NEXT')return next;
     if(next.authorization==='allow-actions'&&!opts.allowActions)return {...next,status:'BLOCKED',code:'ACTION_AUTHORIZATION_REQUIRED',action:'Authorize isolated test app capture using --allow-actions'};
+    if(next.kind==='capture'&&managedApp(config)&&!opts.allowLaunch)return {...next,status:'BLOCKED',code:'APP_LAUNCH_AUTHORIZATION_REQUIRED',action:'Review managed runtime and authorize --allow-launch'};
     if(next.authorization==='allow-paid-api'&&!opts.allowPaidApi)return {...next,status:'BLOCKED',code:'PAID_AUTHORIZATION_REQUIRED',action:'Review provider budget and authorize --allow-paid-api'};
     const key=keyOf(next);
     const attempts=j?.events.filter(e=>e.key===key&&e.status==='RUNNING').length||0;

@@ -20,6 +20,7 @@ import {storyboardContext,checkStoryboardProposal,applyStoryboardProposal} from 
 import {auditionVoice,importAudition,listAuditions,chooseAudition,evaluateTiming} from '../src/voice-timing.mjs';
 import {visualStatus} from '../src/visual-direction.mjs';
 import {productionNext,productionStep,recoverProduction,productionDiagnose} from '../src/production-executor.mjs';
+import {appStatus,approveApp,trialApp,managedApp} from '../src/app-runtime.mjs';
 const apiSession={calls:0};
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 function usage(){console.log(`AI Video Producer v0.1 (local-first, software-demo)
@@ -68,9 +69,9 @@ Usage: avp <command> [--project DIR] [--scene ID] [options]
   asset add --scene ID --name NAME --file VIDEO  Import an authentic scene inset/shot source
   preview --scene ID         Render scene with FFmpeg or scene.edit Remotion
   qa --scene ID              Probe scene media (technical QA)
-  production next            Inspect next step of frozen Build (no execution)
+  app status                 Inspect managed app manifest/approval/trial\n  app approve --hash HASH --confirm  Review exact local Node entrypoint/source\n  app trial --allow-launch   Start, probe readiness and clean up disposable app\n  production next            Inspect next step of frozen Build (no execution)
   production diagnose        Explain current typed failure and recovery policy
-  production step [--allow-actions] [--allow-paid-api] [--retry-failed] [--confirm-reset]  Execute one authorized step
+  production step [--allow-launch] [--allow-actions] [--allow-paid-api] [--retry-failed] [--confirm-reset]  Execute one authorized step
   production recover --confirm  Recover a dead local executor lock; does not retry work
   run [--allow-paid-api]     Resume stale steps, respecting review gates
   render                     Concatenate approved scene previews (or Remotion)
@@ -99,7 +100,7 @@ function plan(root,config,opts={}){const dir=path.join(avpDir(root),'planning');
 function chooseScene(config,args){const id=args.scene;if(!id)throw Error('Use --scene ID');const scene=config.scenes.find(x=>x.id===id);if(!scene)throw Error(`Unknown scene: ${id}`);return scene;}
 async function buildScene(root,config,state,scene,args){requireBuildGate(root,config,state);if(config.review.mode==='review'){gate(state,config,'coverage',root);gate(state,config,'storyboard',root);}const ss=sceneState(state,scene.id);if(ss.locked){const st=staleParts(scene,config,ss,root);if(Object.values(st).some(Boolean))throw Error(`Locked scene ${scene.id} is stale. Review changes and explicitly unlock.`);return {scene:scene.id,skipped:'locked'};}
   const results={scene:scene.id};const stale=staleParts(scene,config,ss,root);
-  if(stale.capture)results.capture=await capture(root,config,scene,state);
+  if(stale.capture)results.capture=await capture(root,config,scene,state,{allowActions:args['allow-actions']===true,allowLaunch:args['allow-launch']===true});
   if(config.voiceover.enabled!==false&&staleParts(scene,config,ss,root).voice)results.voice=await voice(root,config,scene,state,{allowPaidApi:!!args['allow-paid-api'],budgetSession:apiSession});
   if(staleParts(scene,config,ss,root).captions)results.captions=captions(root,config,scene,state);
   if(staleParts(scene,config,ss,root).preview)results.preview=await preview(root,config,scene,state);
@@ -138,14 +139,18 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
         console.log(JSON.stringify(approveAdapter(root,config,scene,{confirm:args.confirm===true}),null,2));break;
       }
       if(op==='trial'){
-        console.log(JSON.stringify(await trialAdapter(root,config,scene,{allowActions:args['allow-actions']===true}),null,2));break;
+        console.log(JSON.stringify(await trialAdapter(root,config,scene,{allowActions:args['allow-actions']===true,allowLaunch:args['allow-launch']===true}),null,2));break;
       }
       throw Error('Use adapters init|status|approve|trial; see docs/project-adapters.md');
     }
     case 'evidence':console.log(JSON.stringify(inspectEvidence(root,config,state,{isCaptureStale:scene=>staleParts(scene,config,sceneState(state,scene.id),root).capture}),null,2));break;
+    case 'app':{
+      const op=args._[1]||'status';const result=op==='status'?appStatus(root,config):op==='approve'?approveApp(root,config,{hash:args.hash,confirm:args.confirm===true}):op==='trial'?await trialApp(root,config,{allowLaunch:args['allow-launch']===true}):null;
+      if(!result)throw Error('Use app status|approve|trial');console.log(JSON.stringify(result,null,2));break;
+    }
     case 'production':{
       const op=args._[1]||'next';
-      const result=op==='next'?productionNext(root,config):op==='diagnose'?productionDiagnose(root,config):op==='step'?await productionStep(root,{allowActions:args['allow-actions']===true,allowPaidApi:args['allow-paid-api']===true,retryFailed:args['retry-failed']===true,confirmReset:args['confirm-reset']===true}):op==='recover'?recoverProduction(root,{confirm:args.confirm===true}):null;
+      const result=op==='next'?productionNext(root,config):op==='diagnose'?productionDiagnose(root,config):op==='step'?await productionStep(root,{allowLaunch:args['allow-launch']===true,allowActions:args['allow-actions']===true,allowPaidApi:args['allow-paid-api']===true,retryFailed:args['retry-failed']===true,confirmReset:args['confirm-reset']===true}):op==='recover'?recoverProduction(root,{confirm:args.confirm===true}):null;
       if(!result)throw Error('Use production next|diagnose|step|recover');
       console.log(JSON.stringify(result,null,2));if(['BLOCKED','REVIEW_REQUIRED','RECOVERY_REQUIRED'].includes(result.status))process.exitCode=2;break;
     }
@@ -184,7 +189,7 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
       }
       if(op==='rehearse'){
         const scene=chooseScene(config,args);
-        console.log(JSON.stringify(await rehearseScene(root,config,scene,{allowActions:args['allow-actions']===true}),null,2));break;
+        console.log(JSON.stringify(await rehearseScene(root,config,scene,{allowActions:args['allow-actions']===true,allowLaunch:args['allow-launch']===true}),null,2));break;
       }
       if(op==='check'||op==='gate'){
         const result=checkBuild(root,config,state);console.log(JSON.stringify(result,null,2));
@@ -209,7 +214,7 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
       if(args.confirm!==true)throw Error('Restoring scene media is destructive: unlock the scene, then pass --confirm --version v0001');
       if(typeof args.version!=='string')throw Error('Specify --version v0001');
       console.log(JSON.stringify(restoreSceneSnapshot(root,config,s,state,args.version),null,2));break;}
-    case 'capture':{requireBuildGate(root,config,state);const s=chooseScene(config,args);gate(state,config,'coverage',root);gate(state,config,'storyboard',root);console.log(JSON.stringify(await capture(root,config,s,state,{force:!!args.force}),null,2));break;}
+    case 'capture':{requireBuildGate(root,config,state);const s=chooseScene(config,args);gate(state,config,'coverage',root);gate(state,config,'storyboard',root);console.log(JSON.stringify(await capture(root,config,s,state,{force:!!args.force,allowActions:args['allow-actions']===true,allowLaunch:args['allow-launch']===true}),null,2));break;}
     case 'attach':{requireBuildGate(root,config,state);const s=chooseScene(config,args);if(!args.file)throw Error('Specify --file path/to/authentic-video.mp4');requireUnlocked(state,s.id);const file=path.resolve(args.file);if(!fs.existsSync(file))throw Error('File not found');const p=probe(file);if(!p.streams.some(x=>x.codec_type==='video'))throw Error('Not a video');const dir=sceneDir(root,s.id);fs.mkdirSync(dir,{recursive:true});const output=path.join(dir,'capture.mp4');const temp=path.join(dir,'capture.attach.mp4');const {run}=await import('../src/utils.mjs');run('ffmpeg',['-y','-v','error','-i',file,'-vf',`fps=${config.render.fps},scale=${config.render.width}:${config.render.height}:force_original_aspect_ratio=decrease,pad=${config.render.width}:${config.render.height}:(ow-iw)/2:(oh-ih)/2`,'-an','-c:v','libx264','-pix_fmt','yuv420p',temp]);fs.renameSync(temp,output);const {inputHashes,recordArtifact}=await import('../src/state.mjs');recordArtifact(root,state,s,'capture',output,inputHashes(s,config,sceneState(state,s.id),root).capture);console.log(`Attached authentic recorded footage for ${s.id}`);break;}
     case 'asset':{
       requireBuildGate(root,config,state);

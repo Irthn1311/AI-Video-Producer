@@ -170,3 +170,38 @@ async function exercise(kind){
   }finally{await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});}
 }
 for(const kind of ['dashboard','canvas'])test('integrated creative Build, real '+kind+' capture, render and scoped repair',{skip:process.env.AVP_INTEGRATED_SMOKE!=='1',timeout:480000},()=>exercise(kind));
+
+test('managed Node lifecycle is used by actual rehearsal and capture',{skip:process.env.AVP_INTEGRATED_SMOKE!=='1',timeout:180000},async()=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'avp-managed-browser-'));
+  const portServer=http.createServer();
+  try{
+    await new Promise(r=>portServer.listen(0,'127.0.0.1',r));
+    const port=portServer.address().port;await new Promise(r=>portServer.close(r));
+    fs.mkdirSync(path.join(root,'app'));
+    fs.writeFileSync(path.join(root,'app','server.mjs'),`import http from 'node:http';http.createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end('<h1>Managed fixture</h1>');}).listen(Number(process.env.PORT),process.env.HOST);`);
+    const config=readJson(path.join(repo,'templates','project.json'));config.sourcePath='app';config.appUrl='http://127.0.0.1:'+port;
+    config.workflow={requireBuild:true};config.review.mode='autonomous';config.voiceover.enabled=false;
+    config.render={engine:'ffmpeg',width:320,height:180,fps:24,captionsBurned:false};
+    config.appRuntime={mode:'managed-node',entrypoint:'server.mjs',readinessPath:'/',startupTimeoutMs:5000,reset:'fresh-process',isolation:'operator-approved-disposable-local-fixture'};
+    config.scenes=[{id:'managed',title:'Managed fixture',durationSec:2,featureIds:['heading'],narration:'Managed fixture.',
+      claims:[{id:'heading',featureId:'heading',text:'Managed fixture.',evidenceIds:['heading']}],
+      capture:{actions:[{type:'goto',path:'/'},{type:'assertVisible',role:'heading',name:'Managed fixture',evidenceId:'heading'}],evidencePolicy:{requireAssertions:true,failOnPageError:true}}}];
+    writeJson(path.join(root,'project.json'),config);
+    const status=await json(root,'app','status');
+    await json(root,'app','approve','--hash',status.manifestHash,'--confirm');
+    assert.equal((await json(root,'app','trial','--allow-launch')).status,'TRIAL_PASS');
+    await json(root,'build','prepare');
+    await deny(root,['build','rehearse','--scene','managed','--allow-actions'],/allow-launch/);
+    assert.equal((await json(root,'build','rehearse','--scene','managed','--allow-actions','--allow-launch')).status,'PASS');
+    assert.equal((await json(root,'build','freeze','--confirm')).status,'READY');
+    await assert.rejects(cli(root,'production','step','--allow-actions'),e=>JSON.parse(e.stdout).code==='APP_LAUNCH_AUTHORIZATION_REQUIRED');
+    assert.equal((await json(root,'production','step','--allow-actions','--allow-launch')).status,'EXECUTED');
+    const report=readJson(path.join(sceneDir(root,'managed'),'capture-report.json'));
+    assert.equal(report.appSession.manifestHash,status.manifestHash);
+    assert.equal(report.status,'PASS');
+    await assert.rejects(fetch(config.appUrl,{signal:AbortSignal.timeout(1000)}));
+    await json(root,'production','step');await json(root,'production','step');
+    const qa=await json(root,'production','step');assert.equal(qa.step.kind,'qa');assert.equal(qa.status,'EXECUTED');
+    assert.equal((await json(root,'production','step')).next.status,'COMPLETE');
+  }finally{if(portServer.listening)await new Promise(r=>portServer.close(r));fs.rmSync(root,{recursive:true,force:true});}
+});

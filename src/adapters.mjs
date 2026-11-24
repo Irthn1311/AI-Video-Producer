@@ -132,7 +132,8 @@ export function adapterFingerprint(root,config,scene){
     const {hash}=ensureManifest(root,config,scene),id=scene.capture.adapter;
     return {id,manifestHash:hash,
       reviewHash:safeFile(reviewPath(root,id))?fileHash(reviewPath(root,id)):null,
-      receiptHash:safeFile(receiptPath(root,id))?fileHash(receiptPath(root,id)):null};
+      receiptHash:safeFile(receiptPath(root,id))?fileHash(receiptPath(root,id)):null,
+      reportHash:safeFile(reportPath(root,id))?fileHash(reportPath(root,id)):null};
   }catch{return {id:scene.capture.adapter,invalid:true};}
 }
 export function scaffoldAdapter(root,config,scene,{id,capabilities=[]}={}){

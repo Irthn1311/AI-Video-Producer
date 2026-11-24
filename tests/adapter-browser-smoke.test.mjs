@@ -75,7 +75,10 @@ test('real browser adapter review → trial → frozen Build → authentic captu
     assert.equal(adapterStatus(root,config,scene).status,'TRIAL_PASS');
     const reportFile=path.join(root,'.avp','adapters','app-recipe','trial-report.json');
     const unmodified=readJson(reportFile),corrupted=structuredClone(unmodified);
+    const beforeProofHash=inputHashes(scene,config,{},root).capture;
     corrupted.assertions[0].pass=false;writeJson(reportFile,corrupted);
+    assert.notEqual(inputHashes(scene,config,{},root).capture,beforeProofHash,
+      'Tampered adapter trial report must invalidate media/cache fingerprints');
     assert.equal(adapterStatus(root,config,scene).status,'TRIAL_REQUIRED',
       'Trial receipt must reject changed evidence even if status remains PASS');
     writeJson(reportFile,unmodified);

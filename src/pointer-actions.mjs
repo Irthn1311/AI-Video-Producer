@@ -1,7 +1,8 @@
 // Declarative pointer primitive: no arbitrary script, CSS selector, file or network access.
+import {setTimeout as sleep} from 'node:timers/promises';
 import {validateCanvasLocator,validateCanvasPixels} from './capture-assertions.mjs';
 const locatorFields=['testId','role','name','label','text','canvasClass'];
-const keys=new Set(['type',...locatorFields,'points','timeoutMs']);
+const keys=new Set(['type',...locatorFields,'points','timeoutMs','durationMs']);
 export function validatePointerPath(a){
   if(!a||typeof a!=='object'||Array.isArray(a)||a.type!=='pointerPath'||Object.keys(a).some(k=>!keys.has(k)))
     throw Error('Invalid pointerPath fields');
@@ -15,6 +16,7 @@ export function validatePointerPath(a){
       throw Error('Pointer coordinates must be normalized to [0,1]');
   }
   if(a.points.every(p=>p.x===a.points[0].x&&p.y===a.points[0].y))throw Error('Pointer path must move');
+  if(a.durationMs!==undefined&&(!Number.isSafeInteger(a.durationMs)||a.durationMs<250||a.durationMs>5000))throw Error('pointerPath durationMs must be 250–5000 ms');
   if(a.timeoutMs!==undefined&&(!Number.isInteger(a.timeoutMs)||a.timeoutMs<100||a.timeoutMs>15000))
     throw Error('pointerPath timeout must be 100–15000 ms');
 }
@@ -48,6 +50,22 @@ export async function executePointerPath(page,action,locate){
   if(points.some(p=>p.x<0||p.y<0||p.x>=viewport.width||p.y>=viewport.height))throw Error('Pointer path leaves viewport');
   await page.mouse.move(points[0].x,points[0].y);
   await page.mouse.down();
-  try{for(const p of points.slice(1))await page.mouse.move(p.x,p.y,{steps:2});}
-  finally{await page.mouse.up();}
+  try{
+    if(action.durationMs===undefined){for(const p of points.slice(1))await page.mouse.move(p.x,p.y,{steps:2});}
+    else{
+      // Pace real mouse events by cumulative path length; measured runtime may exceed target.
+      const lengths=points.slice(1).map((p,i)=>Math.hypot(p.x-points[i].x,p.y-points[i].y)),total=lengths.reduce((a,b)=>a+b,0);
+      const start=performance.now();let elapsed=0;
+      for(const [i,length] of lengths.entries()){
+        if(!length)continue;
+        const ms=action.durationMs*length/total,n=Math.max(1,Math.ceil(ms/40)),a=points[i],b=points[i+1];
+        for(let j=1;j<=n;j++){
+          const fraction=j/n,delay=start+elapsed+ms*fraction-performance.now();
+          if(delay>0)await sleep(delay);
+          await page.mouse.move(a.x+(b.x-a.x)*fraction,a.y+(b.y-a.y)*fraction);
+        }
+        elapsed+=ms;
+      }
+    }
+  }finally{await page.mouse.up();}
 }

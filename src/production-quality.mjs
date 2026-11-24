@@ -125,7 +125,12 @@ export function qualityScene(root,config,scene,{previewSec,captionInfo,captureRe
     run('ffmpeg',['-y','-nostdin','-v','error','-ss',String(ms/1000),'-i',file,'-frames:v','1','-vf','scale=960:-2:force_original_aspect_ratio=decrease','-q:v','3',dest],{timeout:30000});
     frames.push({file:name,timeMs:ms,hash:fileHash(dest)});
   }
-  return {schemaVersion:1,previewHash,renderHash:render.renderHash,markers,timeline,captions,audio,frames,
+  const pacing=markers.pass?{actionEndSec:markers.actionEndSec,rawCaptureSec:round(duration(capture)),
+    // This is the time after the last declared action, NOT proof that the image is static or the time unnecessary.
+    approximatePostActionCaptureSec:round(Math.max(0,duration(capture)-markers.actionEndSec)),
+    pointerActions:(captureReport.actions||[]).filter(a=>a.type==='pointerPath').map(a=>({index:a.index,measuredMs:a.endMs-a.startMs})),
+    scope:'ADVISORY_APPROXIMATE_CAPTURE_CLOCK_NOT_EDITORIAL_JUDGMENT'}:null;
+  return {schemaVersion:1,previewHash,renderHash:render.renderHash,markers,timeline,captions,audio,frames,pacing,
     checks:{actionMarkers:markers.pass,evidenceTimeline:timeline.pass,captionReadability:captions.pass,audioQuality:audioPass,reviewFrames:frames.length>0},
     semanticStatus:'NOT_EVALUATED',reviewScope:'FRAME_CANDIDATES_AND_TECHNICAL_CHECKS_ONLY'};
 }

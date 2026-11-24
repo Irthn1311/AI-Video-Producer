@@ -6,6 +6,8 @@ import {readJson,writeJson,fileHash,sha,sceneDir} from '../src/utils.mjs';
 import {scaffoldAdapter,adapterPath,approveAdapter} from '../src/adapters.mjs';
 const exec=promisify(execFile),repo=path.resolve(import.meta.dirname,'..'),pin='53be67ab8c47cc0d2168899e7481bc04839c4c81';
 if(process.env.AVP_EXTERNAL_ISOLATED!=='1')throw Error('Use isolated pilot workflow');
+const mode=process.argv[4]||'baseline';if(!['baseline','quality'].includes(mode))throw Error('Invalid pilot mode');
+const voiced=mode==='quality';
 const upstream=path.resolve(process.argv[2]),dest=path.resolve(process.argv[3]),root=fs.mkdtempSync(path.join(os.tmpdir(),'avp-jspaint-'));
 const source=path.join(root,'app'),assets=new Map(),types={html:'text/html; charset=utf-8',htm:'text/html; charset=utf-8',js:'text/javascript; charset=utf-8',css:'text/css; charset=utf-8',json:'application/json',webmanifest:'application/manifest+json',svg:'image/svg+xml',png:'image/png',gif:'image/gif',jpg:'image/jpeg',webp:'image/webp',ico:'image/x-icon',wav:'audio/wav',txt:'text/plain',properties:'text/plain'};
 function loadAssets(){
@@ -39,14 +41,24 @@ const server=http.createServer((req,res)=>{
 });
 const cli=async(...args)=>{try{const {stdout}=await exec(process.execPath,[path.join(repo,'bin','avp.mjs'),...args,'--project',root],{timeout:180000,maxBuffer:4*1024*1024});return JSON.parse(stdout);}catch(e){if(e.code===2&&e.stdout)try{return JSON.parse(e.stdout);}catch{}throw e;}};
 const dispatch=async(kind,...flags)=>{const n=await cli('workflow','next');assert.equal(n.status,'NEXT',JSON.stringify(n));assert.equal(n.kind==='production'?n.operation:n.kind,kind,JSON.stringify(n));const s=await cli('workflow','step','--hash',n.taskHash,...flags);assert.equal(s.status,'EXECUTED',JSON.stringify(s));return s;};
+async function selectLocalSpeech(scene){
+  const wav=path.join(root,scene.id+'-local-speech.wav');
+  execFileSync('espeak-ng',['-v','vi-sgn','-s','145','-w',wav,scene.narration],{timeout:30000});
+  const candidate=await cli('timing','import','--scene',scene.id,'--file',wav,'--confirm');
+  // Scripted test selection exercises the exact local audio path; no listening or naturalness attestation.
+  await cli('timing','select','--scene',scene.id,'--hash',candidate.candidateHash,'--confirm');
+  return {sceneId:scene.id,candidateHash:candidate.candidateHash,origin:'ESPEAK_NG_LOCAL_SYNTHETIC_VI_SGN'};
+}
 let stage='intake';
 try{
   fs.mkdirSync(source,{recursive:true});loadAssets();await new Promise(r=>server.listen(0,'127.0.0.1',r));
   const config=readJson(path.join(repo,'templates','project.json'));
   config.title='JS Paint: draw on the actual canvas';config.sourcePath='app';config.appUrl='http://127.0.0.1:'+server.address().port;
-  config.workflow={requireBuild:true};config.review.mode='autonomous';config.voiceover.enabled=false;config.productionQuality={};config.capabilityRequirements=['pointer-interaction'];
-  config.render={engine:'ffmpeg',width:1280,height:720,fps:24,captionsBurned:true};
+  config.workflow={requireBuild:true};config.review.mode='autonomous';config.voiceover.enabled=voiced;config.productionQuality=voiced?{targetLufs:-20}:{};config.capabilityRequirements=['pointer-interaction'];
+  config.render={engine:'ffmpeg',width:voiced?960:1280,height:voiced?540:720,fps:24,captionsBurned:true};
+  if(voiced){config.language={script:'vi',narration:'vi-VN',subtitles:['vi']};config.voiceover.style='Local synthetic Vietnamese integration test; not Gemini synthesis';}
   config.creative={audience:'First-time graphics editor users',goal:'Show real drawing on the app canvas',director:{mode:'autonomous',visualStyle:'clean',maxDurationSec:30}};
+  if(voiced)config.creative.timing={maxSilenceSec:2,actionToleranceSec:.25};
   writeJson(path.join(root,'project.json'),config);
   stage='source-analysis';await dispatch('analyze');await dispatch('skills');assert.equal((await cli('workflow','next')).kind,'author-storyboard');
   const ctx=await cli('storyboard','context'),ref=p=>{const f=ctx.sourceFiles.find(x=>x.path===p);assert.ok(f,p);return f;};
@@ -54,10 +66,10 @@ try{
   const draw=points=>[{type:'goto',path:'/'},{type:'pause',ms:1500},
     {type:'assertCanvasPixels',...loc,pixelColor:'#ffffffff',minPixels:1000,maxPixels:2000000,evidenceId:'white-canvas'},
     {type:'assertCanvasPixels',...loc,pixelColor:'#000000ff',minPixels:0,maxPixels:0,evidenceId:'before'},
-    {type:'pointerPath',...loc,points},
+    {type:'pointerPath',...loc,points,...(voiced?{durationMs:2400}:{})},
     {type:'assertCanvasPixels',...loc,pixelColor:'#000000ff',minPixels:20,maxPixels:2000000,evidenceId:'after',evidenceScreenshot:true}];
   const recipes=[draw([{x:.2,y:.2},{x:.2,y:.6},{x:.6,y:.6}]),draw([{x:.2,y:.6},{x:.35,y:.2},{x:.5,y:.6},{x:.65,y:.2},{x:.8,y:.6}])];
-  const scenes=['stroke','zigzag'].map((id,i)=>{const narration=i?'Draw a zigzag.':'Draw a line.';return {id,title:narration,durationSec:9,featureIds:[id],narration,claims:[{id:id+'-claim',featureId:id,text:narration,evidenceIds:['before','after']}],capture:{adapter:'paint-'+id,actions:[],evidencePolicy:{requireAssertions:true,failOnPageError:true}}};});
+  const scenes=['stroke','zigzag'].map((id,i)=>{const narration=voiced?(i?'Tiếp theo, kéo chuột để tạo một đường gấp khúc.':'Với bút chì, bạn có thể vẽ trực tiếp trên vùng giấy trắng.'):(i?'Draw a zigzag.':'Draw a line.');return {id,title:narration,durationSec:voiced?7:9,featureIds:[id],narration,claims:[{id:id+'-claim',featureId:id,text:narration,evidenceIds:['before','after']}],capture:{adapter:'paint-'+id,actions:[],evidencePolicy:{requireAssertions:true,failOnPageError:true}}};});
   const proposal={schemaVersion:1,baseConfigHash:ctx.baseConfigHash,sourceFingerprint:ctx.sourceFingerprint,storyRationale:'Demonstrate two simple pencil strokes, each in fresh browser storage.',
     features:scenes.map(s=>({id:s.id,reason:'Real pencil drawing',sourceRefs:[ref('src/app-state.js'),ref('src/tools.js')]})),
     scenes:scenes.map((scene,i)=>({scene,role:i?'workflow':'hook',purpose:scene.title,startState:'Fresh isolated browser context',endState:'Actual canvas contains black pixels after pointer drawing',fallback:'Return to Build',dependsOn:[],direction:{}}))};
@@ -73,27 +85,30 @@ try{
   }
   stage='adapter-trial';await dispatch('adapter-trial','--allow-actions');await dispatch('adapter-trial','--allow-actions');
   stage='build';await dispatch('prepare');await dispatch('rehearse','--allow-actions');await dispatch('rehearse','--allow-actions');
+  const selected=[];if(voiced){stage='local-speech-selection';for(const s of scenes)selected.push(await selectLocalSpeech(s));assert.equal((await cli('timing','check')).status,'PASS');}
   assert.equal((await cli('build','freeze','--confirm')).status,'READY');
   stage='production';const proof=[];
   for(const s of scenes){await dispatch('capture','--allow-actions');const cap=readJson(path.join(sceneDir(root,s.id),'capture-report.json'));const before=cap.assertions.find(x=>x.id==='before').canvas,after=cap.assertions.find(x=>x.id==='after').canvas;
-    assert.equal(before.count,0);assert.ok(after.count>=20);proof.push({sceneId:s.id,before,after});await dispatch('captions');await dispatch('preview');await dispatch('qa');}
+    assert.equal(before.count,0);assert.ok(after.count>=20);const pointer=cap.actions.find(a=>a.type==='pointerPath');if(voiced)assert.ok(pointer.endMs-pointer.startMs>=2350);proof.push({sceneId:s.id,before,after,pointerMs:pointer.endMs-pointer.startMs});if(voiced)await dispatch('voice');await dispatch('captions');await dispatch('preview');await dispatch('qa');}
   assert.equal((await dispatch('render')).next.status,'COMPLETE');
   const full=await cli('benchmark','record','--label','jspaint-full','--kind','full','--scope','external','--confirm');assert.equal(full.reservedCallsDelta,0);
   const prior=await cli('release','archive','--confirm'),other=fileHash(path.join(sceneDir(root,'stroke'),'preview.mp4')),capture=fileHash(path.join(sceneDir(root,'zigzag'),'capture.mp4'));
   stage='repair';const newContext=await cli('storyboard','context'),revision=structuredClone(proposal);revision.baseConfigHash=newContext.baseConfigHash;revision.sourceFingerprint=newContext.sourceFingerprint;
-  revision.scenes[1].scene.narration='Draw a zigzag with the pencil.';revision.scenes[1].scene.claims[0].text=revision.scenes[1].scene.narration;
+  revision.scenes[1].scene.narration=voiced?'Dùng bút chì để vẽ đường gấp khúc.':'Draw a zigzag with the pencil.';revision.scenes[1].scene.claims[0].text=revision.scenes[1].scene.narration;
   writeJson(proposalFile,revision);writeJson(path.join(root,'.avp','repair','request.json'),{schemaVersion:1,baseConfigHash:newContext.baseConfigHash,sceneId:'zigzag',cause:'narration',description:'Clarify the pencil tool',rationale:'Retain the actual drawing footage'});
   const plan=await cli('repair','plan');assert.equal(plan.captureScope,'NONE');
   const applied=await cli('repair','apply','--hash',plan.planHash,'--confirm');assert.equal(applied.releaseId,prior.releaseId);
+  if(voiced){stage='repair-voice-selection';selected.push(await selectLocalSpeech(revision.scenes[1].scene));assert.equal((await cli('timing','check')).status,'PASS');}
   await cli('build','prepare','--force');assert.equal((await cli('build','freeze','--confirm')).status,'READY');
-  await dispatch('captions');await dispatch('preview');await dispatch('qa');assert.equal((await dispatch('render')).next.status,'COMPLETE');
+  if(voiced)await dispatch('voice');await dispatch('captions');await dispatch('preview');await dispatch('qa');assert.equal((await dispatch('render')).next.status,'COMPLETE');
   assert.equal(fileHash(path.join(sceneDir(root,'stroke'),'preview.mp4')),other);assert.equal(fileHash(path.join(sceneDir(root,'zigzag'),'capture.mp4')),capture);
-  const repair=await cli('benchmark','record','--label','jspaint-repair','--kind','repair','--scope','external','--confirm');assert.equal(repair.regeneratedCaptureSec,0);
+  const repair=await cli('benchmark','record','--label','jspaint-repair','--kind','repair','--scope','external','--confirm');assert.equal(repair.regeneratedCaptureSec,0);assert.equal(repair.reservedCallsDelta,0);
   const comparison=await cli('benchmark','compare','--full',full.id,'--repair',repair.id);
   stage='export';fs.mkdirSync(dest,{recursive:true});
   for(const name of ['final.mp4','final.srt','final-qa.json','final-report.json'])fs.copyFileSync(path.join(root,'.avp','output',name),path.join(dest,name));
   fs.copyFileSync(path.join(root,'.avp','releases',prior.releaseId,'final.mp4'),path.join(dest,'previous.mp4'));
-  const result={status:'TECHNICAL_PASS',scope:'SOURCE_DERIVED_EXTERNAL_SCRIPTED_PILOT_NOT_BLIND',sourceRevision:pin,proof,full,repair,comparison,semantic:'NOT_INDEPENDENTLY_EVALUATED',voice:'DISABLED'};
+  const qualityReceipts=scenes.map(s=>{const q=readJson(path.join(sceneDir(root,s.id),'qa-report.json'));return {sceneId:s.id,quality:q.quality};});
+  const result={status:'TECHNICAL_PASS',mode,selected,qualityReceipts,scope:'SOURCE_DERIVED_EXTERNAL_SCRIPTED_PILOT_NOT_BLIND',sourceRevision:pin,proof,full,repair,comparison,semantic:'NOT_INDEPENDENTLY_EVALUATED',voice:voiced?'ESPEAK_NG_LOCAL_SYNTHETIC_VI_SGN_NOT_LISTENING_VERIFIED':'DISABLED'};
   writeJson(path.join(dest,'pilot-report.json'),result);console.log('AVP_EXTERNAL_JSPAINT '+JSON.stringify(result));
 }catch(e){console.error('AVP_EXTERNAL_BLOCKER '+JSON.stringify({stage,message:String(e.message).slice(0,2000)}));throw e;}
 finally{if(server.listening)await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});}

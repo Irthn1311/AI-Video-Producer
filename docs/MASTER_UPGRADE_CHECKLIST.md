@@ -88,6 +88,8 @@
 
 ## A4. Creative Brief & Adaptive Interaction — P0
 
+> **F-04 first slice (PARTIAL; pending CI):** opt-in `creative.director` contract, context-specific advisory recommendations, scene-level editorial directions, independent creative/production review modes, exact-hash interactive approval and Build Gate blockers for missing intent, duration overflow or missing review. No automatic storyboard generation, voice audition execution, shot application, targeted invalidation or semantic quality proof yet. See `docs/creative-director.md`. Keep all A4 criteria unchecked until their full acceptance tests pass.
+
 - [ ] `A4-01` Xây `creative-brief.json`: mục đích, đối tượng, phong cách, ngôn ngữ, format, aspect ratio, target duration, độ chi tiết, tone, thương hiệu.
 - [ ] `A4-02` Đặt sớm các ràng buộc ảnh hưởng **kịch bản** (thời lượng, 9:16/16:9, ngôn ngữ, định hướng voice, mục tiêu trình bày); không chờ render mới quyết định.
 - [ ] `A4-03` AI tự đề xuất số scene, thứ tự tính năng, hook, kết luận, voice preset, nhịp dựng, cách zoom/focus, transition; giải thích sự phù hợp với app.

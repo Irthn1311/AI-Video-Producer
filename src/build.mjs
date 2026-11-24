@@ -8,6 +8,7 @@ import {projectAdapterSnapshot,adapterStatus,adapterActions} from './adapters.mj
 import {gate,inputHashes} from './state.mjs';
 import {requireCoveragePlan,verificationMode} from './evidence.mjs';
 import {rehearsalPath} from './rehearsal.mjs';
+import {makeCreativeBrief,creativeStatus} from './creative-director.mjs';
 
 const SCHEMA=1;
 const files=['project-profile','feature-inventory','capability-profile','toolchain-lock',
@@ -103,7 +104,7 @@ function makeArtifacts(root,config){
   const toolchain={...toolchainSnapshot(config,root),...source,
     domainCapabilityLock:{registryHash:matching.registryHash,requirements:matching.requirements,
       projectAdapters:adapters,externalInstalls:[],externalSkillsExecuted:false}};
-  const brief={schemaVersion:SCHEMA,...source,title:config.title,
+  const brief=makeCreativeBrief(root,config,{analysis,sourceHash})||{schemaVersion:SCHEMA,...source,title:config.title,
     audience:config.creative?.audience??null,
     goal:config.creative?.goal??'Demonstrate observed application functionality',
     creativeStatus:'PROPOSED_REQUIRES_FREEZE_DECISION',
@@ -341,7 +342,10 @@ export function checkBuild(root,config,state,{forFreeze=false}={}){
   const rehearsal=verifyRehearsals(root,config);
   const planning=checkPlanning(root,config,state);
   const problems=[...a.problems,...rehearsal.problems,...planning.problems];
-  const reviews=planning.review;
+  const reviews=[...planning.review];
+  const creative=creativeStatus(root,config,{sourceHash:a.sourceHash});
+  if(creative.status==='BLOCKED')problems.push(...creative.issues);
+  if(creative.status==='REVIEW_REQUIRED')reviews.push(issue('BUILD_CREATIVE_REVIEW_PENDING','Current creative brief needs explicit review','Run avp creative recommend, then creative approve --hash HASH --confirm'));
   const lockValid=!problems.length&&!reviews.length&&validateLock(root,config,rehearsal.proofHashes);
   if(!forFreeze&&!problems.length&&!reviews.length&&!lockValid)
     reviews.push(issue('BUILD_FREEZE_REQUIRED','Build is technically prepared but not frozen','Run avp build freeze after reviewing the production plan'));
@@ -350,6 +354,7 @@ export function checkBuild(root,config,state,{forFreeze=false}={}){
     schemaVersion:SCHEMA,status,ready:status==='READY',checkedAt:timestamp(),
     projectConfigHash:a.configHash,sourceFingerprint:a.sourceHash,
     problems,reviewRequired:reviews,warnings:a.warnings,
+    creative:{status:creative.status,briefHash:creative.briefHash||null},
     stages:{
       intake:a.problems.some(x=>x.code.startsWith('BUILD_SOURCE')||x.code.startsWith('BUILD_CONFIG'))?'BLOCKED':'PASS',
       capabilityMatching:a.problems.some(x=>x.code.includes('TOOL')||x.code.includes('ACTION')||x.code.includes('ADAPTER'))?'BLOCKED':'PASS',
@@ -372,7 +377,7 @@ export function freezeBuild(root,config,state){
     artifactDigests:artifactDigests(root),rehearsalDigests:proofHashes,
     scope:'APP_TO_VIDEO_ONLY',trust:'LOCAL_HASHES_NOT_CRYPTOGRAPHIC_REMOTE_ATTESTATION',
     planHash:fileHash(file(root,'production-plan')),
-    creativeApproval:'EXPLICIT_BUILD_FREEZE',
+    creativeApproval:config.creative?.director?creativeStatus(root,config).status:'EXPLICIT_BUILD_FREEZE',
     note:'Approved Build input is not runtime proof of produced scenes'
   };
   writeJson(file(root,'build-lock'),lock);
@@ -382,7 +387,7 @@ export function freezeBuild(root,config,state){
     sceneCount:config.scenes.length,buildLock:file(root,'build-lock')};
 }
 export function requiresBuild(root,config){
-  return config.workflow?.requireBuild===true||exists(file(root,'build-state'));
+  return config.creative?.director!==undefined||config.workflow?.requireBuild===true||exists(file(root,'build-state'));
 }
 /** Legacy projects remain compatible until they opt into Build or are initialized with it. */
 export function requireBuildGate(root,config,state){

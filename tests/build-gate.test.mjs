@@ -133,3 +133,27 @@ test('legacy project with no opted-in Build retains previous CLI workflow gates'
     assert.equal(status.build.status,'LEGACY_NOT_ENFORCED');
   }finally{cleanup(f);}
 });
+
+test('opt-in interactive creative approval is hash-bound and cannot bypass missing rehearsals',()=>{
+  const f=setup();
+  try{
+    f.config.creative={audience:'technical reviewers',goal:'show verified workflow',director:{mode:'interactive',visualStyle:'minimal',sceneDirections:{[f.config.scenes[0].id]:{framing:'no zoom'}}}};
+    writeJson(path.join(f.root,'project.json'),f.config);
+    assert.equal(cli(f.root,'build','prepare').status,0);
+    let r=checkBuild(f.root,f.config,f.state);
+    assert.ok(r.reviewRequired.some(x=>x.code==='BUILD_CREATIVE_REVIEW_PENDING'));
+    const c=JSON.parse(cli(f.root,'creative','recommend').stdout);
+    assert.equal(c.status,'REVIEW_REQUIRED');
+    assert.equal(cli(f.root,'creative','approve','--hash','bad','--confirm').status,1);
+    const approval=cli(f.root,'creative','approve','--hash',c.briefHash,'--confirm');
+    assert.equal(approval.status,0,approval.stderr);
+    r=checkBuild(f.root,f.config,f.state);
+    assert.equal(r.creative.status,'APPROVED');
+    assert.equal(r.status,'BLOCKED');
+    assert.ok(r.problems.some(x=>x.code==='BUILD_REHEARSAL_MISSING'));
+    f.config.creative.director.visualStyle='editorial';
+    writeJson(path.join(f.root,'project.json'),f.config);
+    assert.equal(cli(f.root,'build','prepare','--force').status,0);
+    assert.ok(checkBuild(f.root,f.config,f.state).reviewRequired.some(x=>x.code==='BUILD_CREATIVE_REVIEW_PENDING'));
+  }finally{cleanup(f);}
+});

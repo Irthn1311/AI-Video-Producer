@@ -4,7 +4,7 @@ import {avpDir,sceneDir,readJson,fileHash} from './utils.mjs';
 import {captureEvidencePassed} from './capture-assertions.mjs';
 import {adapterActions} from './adapters.mjs';
 
-const assertionTypes = new Set(['assertVisible','assertText','assertAttribute','clickExpectResponse']);
+const assertionTypes = new Set(['assertVisible','assertText','assertAttribute','clickExpectResponse','assertCanvasPixels']);
 const safeId = v => typeof v==='string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(v);
 const normalize = value => String(value).replace(/\s+/gu,' ').trim().toLocaleLowerCase('en-US');
 

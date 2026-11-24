@@ -277,6 +277,8 @@
 
 > **External TodoMVC integration pilot (CI pending):** source-derived keyboard interaction gap fixed; pinned upstream static browser assets, loopback-only execution namespace, actual workflow and scoped repair, artifact retention. Not blind independent agent evaluation or Vietnamese speech; JS Paint pending.
 
+> **External TodoMVC pilot verified, JS Paint candidate (CI pending):** TodoMVC exact-head CI and real output/repair PASS, observed metrics recorded. JS Paint source exposes missing native canvas proof; added adapter-only single-class canvas locator and bounded pixel-count assertions plus pinned isolated external pilot. Independent semantic/agent benchmark, real voice and MathMate parity remain open.
+
 - [ ] `E2-01` Tạo **MathMate Parity Benchmark**: canvas handwriting, desktop/mobile pairing, real OCR/feedback assertions, Remotion timing/inset, voice/captions, final QA — dùng dữ liệu test an toàn, tránh gọi API trả phí ở CI mặc định.
 - [ ] `E2-02` **Unknown App Benchmark**: ít nhất hai app khác MathMate, thuộc hai domain, có feature inventory, skill/tool selection, storyboard, real capture, final video, repair.
 - [ ] `E2-03` Benchmark Interactive và Autonomous, bao gồm thiếu skill, app thực sự lỗi, provider outage, corrupt artifact, stale source, failed approval.

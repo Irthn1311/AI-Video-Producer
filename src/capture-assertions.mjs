@@ -3,7 +3,7 @@
  * screenshots and response bodies stay local to the project, never sent to an LLM.
  */
 const locatorFields=['testId','role','label','text'];
-const evidenceTypes=new Set(['assertVisible','assertText','assertAttribute','clickExpectResponse']);
+const evidenceTypes=new Set(['assertVisible','assertText','assertAttribute','clickExpectResponse','assertCanvasPixels']);
 function finitePositiveTimeout(a){
   if(a.timeoutMs!==undefined&&(!Number.isInteger(a.timeoutMs)||a.timeoutMs<100||a.timeoutMs>120000))
     throw Error(a.type+'.timeoutMs must be 100–120000');
@@ -13,6 +13,13 @@ export function validatePressAction(a){
   if(!locatorPresent(a)||!pressKeys.has(a.key))throw Error('press requires a deterministic locator and an allowed single key');
   finitePositiveTimeout(a);
   if(a.evidenceId!==undefined||a.evidenceScreenshot!==undefined)throw Error('press is an interaction, not an evidence assertion');
+}
+export function validateCanvasLocator(a){
+  if(typeof a.canvasClass!=='string'||!(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/).test(a.canvasClass)||['testId','role','name','label','text'].some(k=>a[k]!==undefined))throw Error('canvasClass must be one literal canvas class, without other locator fields');
+}
+export function validateCanvasPixels(a){
+  validateCanvasLocator(a);finitePositiveTimeout(a);
+  if(typeof a.pixelColor!=='string'||!(/^#[a-fA-F0-9]{8}$/).test(a.pixelColor)||!Number.isSafeInteger(a.minPixels)||!Number.isSafeInteger(a.maxPixels)||a.minPixels<0||a.maxPixels<a.minPixels||a.maxPixels>2000000)throw Error('assertCanvasPixels requires #RRGGBBAA and bounded integer minPixels/maxPixels');
 }
 function locatorPresent(a){return locatorFields.some(k=>typeof a[k]==='string'&&a[k].trim());}
 function nonempty(s,max,label){
@@ -29,10 +36,12 @@ export function validateCaptureEvidenceConfig(capture){
   const ids=new Set();let assertCount=0;
   for(const a of capture.actions){
     if(!a||typeof a!=='object'||Array.isArray(a))throw Error('capture action must be an object');
+    if(a.canvasClass!==undefined){if(!['pointerPath','assertCanvasPixels'].includes(a.type))throw Error('canvasClass is only for adapter canvas interactions');validateCanvasLocator(a);}
     if(a.type==='press')validatePressAction(a);
+    if(a.type==='assertCanvasPixels')validateCanvasPixels(a);
     if(!evidenceTypes.has(a.type))continue;
     assertCount++;
-    if(!locatorPresent(a))throw Error(a.type+' requires a testId, role, label or text locator');
+    if(a.type!=='assertCanvasPixels'&&!locatorPresent(a))throw Error(a.type+' requires a testId, role, label or text locator');
     finitePositiveTimeout(a);
     if(a.evidenceId!==undefined){
       if(typeof a.evidenceId!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(a.evidenceId))
@@ -77,6 +86,19 @@ export async function executeCaptureAssertion(page,action,getLocator,appUrl){
     await el.waitFor({state:'visible',timeout});
     const observed=await el.innerText({timeout});
     if(!observed.includes(action.expectedText))throw Error('Text assertion failed: '+evidence.id);
+  }else if(action.type==='assertCanvasPixels'){
+    validateCanvasPixels(action);await el.waitFor({state:'visible',timeout});
+    const rgba=action.pixelColor.slice(1).match(/../g).map(x=>parseInt(x,16));
+    // Fixed trusted read-only expression, never arbitrary agent-supplied JavaScript.
+    const observed=await el.evaluate((canvas,rgba)=>{
+      if(!(canvas instanceof HTMLCanvasElement)||!Number.isInteger(canvas.width)||!Number.isInteger(canvas.height)||canvas.width<1||canvas.height<1||canvas.width*canvas.height>2000000)throw Error('Canvas dimensions outside evidence limit');
+      const ctx=canvas.getContext('2d');if(!ctx)throw Error('Canvas must have a readable 2D context');
+      const pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data;let count=0;
+      for(let i=0;i<pixels.length;i+=4)if(pixels[i]===rgba[0]&&pixels[i+1]===rgba[1]&&pixels[i+2]===rgba[2]&&pixels[i+3]===rgba[3])count++;
+      return {width:canvas.width,height:canvas.height,count};
+    },rgba,{timeout});
+    if(observed.count<action.minPixels||observed.count>action.maxPixels)throw Error('Canvas pixel count assertion failed: '+evidence.id+' (observed '+observed.count+')');
+    evidence.canvas={color:action.pixelColor.toLowerCase(),...observed,minPixels:action.minPixels,maxPixels:action.maxPixels,scope:'READ_ONLY_2D_RGBA_COUNT'};
   }else if(action.type==='assertAttribute'){
     await el.waitFor({state:'attached',timeout});
     const actual=await el.getAttribute(action.attribute,{timeout});

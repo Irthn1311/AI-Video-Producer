@@ -10,6 +10,8 @@ import {adapterFingerprint} from './adapters.mjs';
 import {selectedVoiceFingerprint} from './voice-selection.mjs';
 import {ExecutionError} from './execution-errors.mjs';
 import {appRuntimeFingerprint} from './app-runtime.mjs';
+import {qualityPolicy} from './quality-policy.mjs';
+import {validateQualityScene,validateFinalAudit} from './production-quality.mjs';
 
 const stamp=()=>new Date().toISOString();
 const planPath=(root,stage)=>path.join(avpDir(root),'planning',stage==='coverage'?'feature-coverage.json':'storyboard.json');
@@ -41,12 +43,12 @@ function editAssetsFingerprint(scene,root){
 /** Capture uses a content fingerprint, not file names or file sizes. Inputs include browser settings and app origin. */
 export function inputHashes(scene,config,ss={},root){
   const artifacts=ss.artifacts||{};
-  const selectionFingerprint=selectedVoiceFingerprint(root,config,scene);
+  const selectionFingerprint=selectedVoiceFingerprint(root,config,scene),quality=qualityPolicy(config);
   return {
-    capture:sha({schema:scene.capture?.adapter?3:2,capture:scene.capture,adapter:scene.capture?.adapter&&root?adapterFingerprint(root,config,scene):undefined,duration:scene.durationSec,appUrl:config.appUrl,appRuntime:appRuntimeFingerprint(root,config),viewport:{width:config.render?.width||1920,height:config.render?.height||1080,fps:config.render?.fps||30},source:root?sourceFingerprint(root,config):null,provider:'playwright-v1'}),
+    capture:sha({schema:scene.capture?.adapter?3:2,capture:scene.capture,adapter:scene.capture?.adapter&&root?adapterFingerprint(root,config,scene):undefined,duration:scene.durationSec,appUrl:config.appUrl,appRuntime:appRuntimeFingerprint(root,config),viewport:{width:config.render?.width||1920,height:config.render?.height||1080,fps:config.render?.fps||30},source:root?sourceFingerprint(root,config):null,provider:'playwright-v1',...(quality?{actionMarkersVersion:1}:{})}),
     voice:sha({schema:2,narration:scene.narration,voice:config.voiceover,language:config.language?.narration,modelOverride:process.env.GEMINI_TTS_MODEL||null,selectedVoice:selectionFingerprint}),
-    captions:sha({schema:3,narration:scene.narration,timing:scene.captionTiming??null,language:config.language?.subtitles,voiceEnabled:config.voiceover?.enabled!==false,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null}),
-    preview:sha({schema:2,render:config.render,duration:scene.durationSec,style:config.style||{},edit:scene.edit,editAssets:editAssetsFingerprint(scene,root),captureHash:artifacts.capture?.hash,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null,captionHash:artifacts.captions?.hash,captionMetadataHash:artifacts.captions?.metadataHash})
+    captions:sha({schema:3,narration:scene.narration,timing:scene.captionTiming??null,language:config.language?.subtitles,voiceEnabled:config.voiceover?.enabled!==false,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null,...(quality?{qualityCaptionMaxChars:quality.maxCaptionChars}:{})}),
+    preview:sha({schema:2,render:config.render,duration:scene.durationSec,style:config.style||{},edit:scene.edit,editAssets:editAssetsFingerprint(scene,root),captureHash:artifacts.capture?.hash,voiceHash:config.voiceover?.enabled!==false?artifacts.voice?.hash:null,captionHash:artifacts.captions?.hash,captionMetadataHash:artifacts.captions?.metadataHash,...(quality?{qualityPolicy:quality}:{})})
   };
 }
 export function staleParts(scene,config,ss,root){
@@ -103,6 +105,7 @@ export function validateSceneQa(root,config,scene,state){
   }
   const expected=inputHashes(scene,config,ss,root).preview;
   if(report.previewHash!==fileHash(previewFile)||report.previewInputHash!==expected||ss.qa.previewHash!==report.previewHash||ss.qa.previewInputHash!==expected||ss.qa.reportHash!==fileHash(p))throw Error(`Scene ${scene.id} QA is stale or does not match current preview. Rerun avp qa`);
+  validateQualityScene(root,config,scene,report);
   return report;
 }
 export function sceneApprovalValid(root,config,scene,state){
@@ -120,6 +123,7 @@ export function validateFinalOutput(root,config,state){
   if(!fs.existsSync(file)||!fs.existsSync(qa)||!state.output)throw Error('Render and validate final video first');
   const report=readJson(qa);
   if(report.pass!==true||!Object.values(report.checks||{}).every(Boolean)||report.outputHash!==fileHash(file)||state.output.hash!==report.outputHash||state.output.qaHash!==fileHash(qa)||state.output.inputHash!==finalInputHash(config,state))throw Error('Final output or QA evidence is stale; render again');
+  validateFinalAudit(root,config,report);
   requireCoveragePlan(root,config);
   for(const scene of config.scenes){validateSceneQa(root,config,scene,state);if(config.review?.mode==='review')sceneApprovalValid(root,config,scene,state);}
   return report;

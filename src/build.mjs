@@ -15,6 +15,7 @@ import {timingEnabled} from './voice-selection.mjs';
 import {shotIds} from './editing.mjs';
 import {visualStatus} from './visual-direction.mjs';
 import {appStatus,managedApp} from './app-runtime.mjs';
+import {qualityPolicy} from './quality-policy.mjs';
 
 const SCHEMA=1;
 const files=['project-profile','feature-inventory','capability-profile','toolchain-lock',
@@ -142,6 +143,7 @@ function makeArtifacts(root,config){
     projectConfigHash:sha(config),toolchainHash:sha(toolchain),
     features:features.map(x=>x.id),
     render:config.render,language:config.language,review:config.review,
+    ...(qualityPolicy(config)?{productionQuality:qualityPolicy(config)}:{}),
     maxEstimatedUsd:config.budget?.maxEstimatedUsd??null,
     dependencies:config.production?.sceneDependencies||{},
     ...(config.creative?.storyboard?{agentStoryboardHash:sha(config.creative.storyboard)}:{}),
@@ -403,7 +405,7 @@ export function freezeBuild(root,config,state){
     sceneCount:config.scenes.length,buildLock:file(root,'build-lock')};
 }
 export function requiresBuild(root,config){
-  return managedApp(config)||config.creative?.visual!==undefined||timingEnabled(config)||config.creative?.storyboard!==undefined||config.creative?.director!==undefined||config.workflow?.requireBuild===true||exists(file(root,'build-state'));
+  return !!qualityPolicy(config)||managedApp(config)||config.creative?.visual!==undefined||timingEnabled(config)||config.creative?.storyboard!==undefined||config.creative?.director!==undefined||config.workflow?.requireBuild===true||exists(file(root,'build-state'));
 }
 /** Legacy projects remain compatible until they opt into Build or are initialized with it. */
 export function requireBuildGate(root,config,state){

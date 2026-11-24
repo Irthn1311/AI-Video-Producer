@@ -12,6 +12,8 @@ import {loadVoiceEnvironment,synthesizeVoice} from './voice-provider.mjs';
 import {timingEnabled,selectedVoice} from './voice-selection.mjs';
 import {ExecutionError,failureDetails} from './execution-errors.mjs';
 import {withAppRuntime,managedApp} from './app-runtime.mjs';
+import {qualityPolicy,qualityCaptionLimit} from './quality-policy.mjs';
+import {masterVoice,sealQualityRender,qualityScene,writeFinalAudit} from './production-quality.mjs';
 const seconds=(value)=>Number(value||0);
 export function probe(file){return JSON.parse(run('ffprobe',['-v','error','-show_format','-show_streams','-of','json',file]));}
 export function mediaSeconds(file){return seconds(probe(file).format?.duration);}
@@ -34,11 +36,12 @@ async function captureCore(root,config,scene,state,opts={}){
   let browser;try{browser=await chromium.launch({headless:true});}catch(e){throw new ExecutionError('TOOL_UNAVAILABLE',e.message);}let ctx;const report={scene:scene.id,actions:[],assertions:[],status:'IN_PROGRESS',startedAt:new Date().toISOString(),
     ...(opts.appSession?{appSession:opts.appSession}:{}),
     adapter:adapterProof?{id:adapterProof.id,manifestHash:adapterProof.manifestHash,receiptHash:adapterProof.receiptHash}:null};
-  try{ctx=await browser.newContext({...(adapterProof?{acceptDownloads:false,serviceWorkers:'block',permissions:[]}:{}),viewport:{width:config.render?.width||1920,height:config.render?.height||1080},recordVideo:{dir:raw,size:{width:config.render?.width||1920,height:config.render?.height||1080}}});await protectAdapterBrowser(ctx,config,scene);const page=await ctx.newPage();const pageErrors=[];report.pageErrors=pageErrors;page.on('pageerror',err=>pageErrors.push(err.message.slice(0,500)));const start=Date.now();
-    for(const a of effectiveActions){const startAction=Date.now();
+  try{ctx=await browser.newContext({...(adapterProof?{acceptDownloads:false,serviceWorkers:'block',permissions:[]}:{}),viewport:{width:config.render?.width||1920,height:config.render?.height||1080},recordVideo:{dir:raw,size:{width:config.render?.width||1920,height:config.render?.height||1080}}});await protectAdapterBrowser(ctx,config,scene);const markerEpoch=performance.now();const page=await ctx.newPage();const pageErrors=[];report.pageErrors=pageErrors;page.on('pageerror',err=>pageErrors.push(err.message.slice(0,500)));const start=Date.now();
+    for(const a of effectiveActions){const startAction=Date.now(),markerStart=Math.round(performance.now()-markerEpoch);
       await executeCaptureAction(page,a,{appUrl:config.appUrl,dir,report,adapter:Boolean(adapterProof)});
-      report.actions.push({type:a.type,ms:Date.now()-startAction});}
+      report.actions.push({type:a.type,ms:Date.now()-startAction,...(qualityPolicy(config)?{index:report.actions.length,startMs:markerStart,endMs:Math.round(performance.now()-markerEpoch),...(a.evidenceId?{evidenceId:a.evidenceId}:{})}:{})});}
     let remaining=scene.durationSec*1000-(Date.now()-start);if(remaining>0)await page.waitForTimeout(remaining);
+    if(qualityPolicy(config))report.markerScope='MONOTONIC_BROWSER_CLOCK_APPROXIMATE_VIDEO_TIME';
     report.finalUrl=page.url();report.pageErrors=pageErrors;report.elapsedMs=Date.now()-start;
     if(scene.capture.evidencePolicy?.requireAssertions&&report.assertions.length===0)throw new ExecutionError('CAPTURE_EVIDENCE_INVALID','Missing required browser assertions');
     if(scene.capture.evidencePolicy?.failOnPageError!==false&&scene.capture.evidencePolicy?.requireAssertions&&pageErrors.length)
@@ -88,7 +91,7 @@ export function captions(root,config,scene,state,opts={}){
   const requested=scene.captionTiming?.mode||(haveVoice?'audio-pauses':'proportional');
   const analysis=haveVoice&&sentenceParts(scene.narration).length?measureSpeech(voiceFile,duration):null;
   const aligned=alignNarration(scene.narration,duration,{
-    mode:requested,maxChars:scene.captionTiming?.maxChars||80,
+    mode:requested,maxChars:qualityCaptionLimit(config,scene),
     anchors:scene.captionTiming?.anchors,measured:analysis
   });
   const srt=aligned.rows.map((row,i)=>
@@ -115,15 +118,17 @@ export async function preview(root,config,scene,state,opts={}){
     // Only the reviewed preview can contain editorial changes. Final render concatenates these approved previews.
     const {renderEditedPreview}=await import('./remotion-preview.mjs');
     const result=await renderEditedPreview(root,config,scene);
+    sealQualityRender(root,config,scene,result.file);
     recordArtifact(root,state,scene,'preview',result.file,inputHashes(scene,config,sceneState(state,scene.id),root).preview);
     return result;
   }
   const dir=sceneDir(root,scene.id),clip=path.join(dir,'capture.mp4'),audio=path.join(dir,'voice.wav');const haveVoice=config.voiceover?.enabled!==false;
+  const master=haveVoice&&qualityPolicy(config)?masterVoice(root,config,scene):audio;
   const duration=Math.max(scene.durationSec,haveVoice?mediaSeconds(audio)+.5:0);let filters=[`fps=${config.render?.fps||30}`,`scale=${config.render?.width||1920}:${config.render?.height||1080}:force_original_aspect_ratio=decrease`,`pad=${config.render?.width||1920}:${config.render?.height||1080}:(ow-iw)/2:(oh-ih)/2`,`tpad=stop_mode=clone:stop_duration=${Math.ceil(duration+1)}`,`trim=duration=${duration}`,`setpts=PTS-STARTPTS`];
   if(config.render?.captionsBurned!==false&&scene.narration.trim())filters.push("subtitles=captions.srt:force_style='Fontsize=22,Outline=2,Alignment=2,MarginV=36'");
-  const args=['-y','-v','error','-i','capture.mp4'];if(haveVoice)args.push('-i','voice.wav');else args.push('-f','lavfi','-i','anullsrc=r=48000:cl=stereo');
-  const out='preview.new.mp4';args.push('-vf',filters.join(','),'-map','0:v:0','-map','1:a:0','-c:v','libx264','-preset','veryfast','-crf','23','-pix_fmt','yuv420p','-c:a','aac','-b:a','160k','-af','apad','-t',String(duration),'-movflags','+faststart',out);
-  run('ffmpeg',args,{cwd:dir});fs.renameSync(path.join(dir,out),path.join(dir,'preview.mp4'));recordArtifact(root,state,scene,'preview',path.join(dir,'preview.mp4'),inputHashes(scene,config,sceneState(state,scene.id),root).preview);return {file:path.join(dir,'preview.mp4'),duration};
+  const args=['-y','-v','error','-i','capture.mp4'];if(haveVoice)args.push('-i',master);else args.push('-f','lavfi','-i','anullsrc=r=48000:cl=stereo');
+  const out='preview.new.mp4';args.push('-vf',filters.join(','),'-map','0:v:0','-map','1:a:0','-c:v','libx264','-preset','veryfast','-crf','23','-pix_fmt','yuv420p','-c:a','aac','-b:a','160k',...(qualityPolicy(config)?['-ar','48000','-ac','2']:[]),'-af','apad','-t',String(duration),'-movflags','+faststart',out);
+  run('ffmpeg',args,{cwd:dir});fs.renameSync(path.join(dir,out),path.join(dir,'preview.mp4'));sealQualityRender(root,config,scene,path.join(dir,'preview.mp4'));recordArtifact(root,state,scene,'preview',path.join(dir,'preview.mp4'),inputHashes(scene,config,sceneState(state,scene.id),root).preview);return {file:path.join(dir,'preview.mp4'),duration};
 }
 export function qaScene(root,config,scene,state){
   const ss=sceneState(state,scene.id),dir=sceneDir(root,scene.id),file=path.join(dir,'preview.mp4');
@@ -139,7 +144,7 @@ export function qaScene(root,config,scene,state){
   const captionInfo=fs.existsSync(captionFile)?readJson(captionFile):null;
   let captionsValid=false;
   try{
-    const maxChars=scene.captionTiming?.maxChars||80;
+    const maxChars=qualityCaptionLimit(config,scene);
     const bounded=config.voiceover?.enabled!==false&&fs.existsSync(path.join(dir,'voice.wav'))
       ?mediaSeconds(path.join(dir,'voice.wav')):scene.durationSec;
     captionsValid=Boolean(captionInfo)&&validateCaptionRows(captionInfo.rows,bounded,maxChars)
@@ -157,7 +162,9 @@ export function qaScene(root,config,scene,state){
     try{claimEvidence=verifySceneClaims(root,config,scene,state);checks.claimEvidence=claimEvidence.pass===true;}
     catch(e){checks.claimEvidence=false;claimEvidenceError=e.message;}
   }
-  const report={scene:scene.id,checks,...(claimEvidence?{claimEvidence}:{}),...(claimEvidenceError?{claimEvidenceError}:{}),pass:Object.values(checks).every(Boolean),durationSec:mediaSeconds(file),captionTiming:captionInfo?.timingMethod||'MISSING',captionReviewRequired:captionInfo?.reviewRequired??true,visualReviewByHuman:false,previewHash:fileHash(file),previewInputHash:inputHashes(scene,config,ss,root).preview,...(evidenceRequired?{captureReportHash:captureReport?fileHash(captureReportFile):null}: {})};
+  const quality=qualityPolicy(config)?qualityScene(root,config,scene,{previewSec:mediaSeconds(file),captionInfo,captureReport:captureReport||readJson(captureReportFile),effectiveActions:adapterActions(root,config,scene)}):null;
+  if(quality)Object.assign(checks,quality.checks);
+  const report={scene:scene.id,checks,...(quality?{quality}:{}),...(claimEvidence?{claimEvidence}:{}),...(claimEvidenceError?{claimEvidenceError}:{}),pass:Object.values(checks).every(Boolean),durationSec:mediaSeconds(file),captionTiming:captionInfo?.timingMethod||'MISSING',captionReviewRequired:captionInfo?.reviewRequired??true,visualReviewByHuman:false,previewHash:fileHash(file),previewInputHash:inputHashes(scene,config,ss,root).preview,...(evidenceRequired?{captureReportHash:captureReport?fileHash(captureReportFile):null}: {})};
   const reportFile=path.join(dir,'qa-report.json');writeJson(reportFile,report);ss.qa={reportHash:fileHash(reportFile),previewHash:report.previewHash,previewInputHash:report.previewInputHash};ss.approved=false;
   invalidateOutput(state);saveState(root,state);return report;
 }
@@ -169,6 +176,7 @@ function finalReport(root,config,state,engine,file){
   const checks={videoH264:v?.codec_name==='h264',audioAAC:a?.codec_name==='aac',width:v?.width===(config.render?.width||1920),height:v?.height===(config.render?.height||1080),duration:Math.abs(actual-target)<1,fullDecode:true};
   const report={schemaVersion:2,engine,file,durationSec:actual,scenes:config.scenes.length,checks,pass:Object.values(checks).every(Boolean),outputHash:fileHash(file),humanFinalApproval:false};
   if(!report.pass)throw new ExecutionError('FINAL_QA_FAILED','Final render failed technical QA',{failedChecks:Object.keys(checks).filter(k=>!checks[k])});
+  const audit=writeFinalAudit(root,config,state,file,report);if(audit)report.qualityExport=audit;
   const qa=path.join(avpDir(root),'output','final-qa.json');writeJson(qa,report);
   invalidateOutput(state);
   state.output={file,createdAt:new Date().toISOString(),hash:report.outputHash,qaHash:fileHash(qa),inputHash:finalInputHash(config,state)};
@@ -187,7 +195,7 @@ export function render(root,config,state,opts={}){
   if(config.render?.engine==='remotion')return renderRemotion(root,config,state,opts);
   const list=path.join(outDir,'concat.txt');fs.writeFileSync(list,previews.map(f=>`file '${f.replaceAll("'", "'\\''")}'`).join('\n')+'\n');
   const out=path.join(outDir,'final.mp4'),tmp=path.join(outDir,'final.new.mp4');
-  run('ffmpeg',['-y','-v','error','-f','concat','-safe','0','-i',list,'-c','copy','-movflags','+faststart',tmp]);fs.renameSync(tmp,out);
+  run('ffmpeg',['-y','-v','error','-f','concat','-safe','0','-i',list,...(qualityPolicy(config)?.exportCrf!=null?['-c:v','libx264','-crf',String(qualityPolicy(config).exportCrf),'-preset','medium','-pix_fmt','yuv420p','-c:a','aac','-ar','48000','-ac','2','-b:a','160k']:['-c','copy']),'-movflags','+faststart',tmp]);fs.renameSync(tmp,out);
   return finalReport(root,config,state,'ffmpeg',out);
 }
 async function renderRemotion(root,config,state,opts){

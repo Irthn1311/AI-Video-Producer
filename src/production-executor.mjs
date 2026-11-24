@@ -128,7 +128,7 @@ async function dispatch(root,config,state,next,opts){
   const s=config.scenes.find(x=>x.id===next.sceneId);
   switch(next.kind){
     case 'capture':return capture(root,config,s,state,{allowLaunch:opts.allowLaunch,allowActions:opts.allowActions});
-    case 'voice':return voice(root,config,s,state,{allowPaidApi:opts.allowPaidApi,budgetSession:{calls:0}});
+    case 'voice':return voice(root,config,s,state,{allowPaidApi:opts.allowPaidApi,budgetSession:{calls:opts.paidCallsThisRevision??0}});
     case 'captions':return captions(root,config,s,state);
     case 'preview':return preview(root,config,s,state);
     case 'qa':{const q=qaScene(root,config,s,state);if(q.pass!==true)throw new ExecutionError('SCENE_QA_FAILED','Technical scene QA failed',{failedChecks:Object.keys(q.checks||{}).filter(k=>!q.checks[k])});return q;}
@@ -165,12 +165,15 @@ export async function productionStep(root,opts={}){
     const key=keyOf(next);
     const attempts=j?.events.filter(e=>e.key===key&&e.status==='RUNNING').length||0;
     if(attempts>=1+retryLimit(config))return {...next,status:'BLOCKED',code:'RETRY_LIMIT_REACHED',action:'Diagnose/repair and prepare a new reviewed Build revision'};
-    j??={schemaVersion:1,runId:randomUUID(),revision:next.revision,planHash:next.planHash,createdAt:now(),artifactBaseline:artifactInventory(root,config,state),events:[]};
+    j??={schemaVersion:1,runId:randomUUID(),revision:next.revision,planHash:next.planHash,createdAt:now(),paidReservationBaseline:state.budget?.ttsCalls||0,artifactBaseline:artifactInventory(root,config,state),events:[]};
+    const paidCallsThisRevision=Math.max(0,(state.budget?.ttsCalls||0)-(Number.isSafeInteger(j.paidReservationBaseline)&&j.paidReservationBaseline>=0?j.paidReservationBaseline:0));
+    if(next.authorization==='allow-paid-api'&&Number.isInteger(config.voiceover?.maxApiCallsPerRun)&&paidCallsThisRevision>=config.voiceover.maxApiCallsPerRun)
+      return {...next,status:'BLOCKED',code:'PAID_RUN_LIMIT_REACHED',action:'Review the existing per-run call limit and estimated project budget; do not dispatch another provider request'};
     const event={key,kind:next.kind,sceneId:next.sceneId,capability:next.capability,attempt:attempts+1};
     const start=Date.now();
     j.events.push({...event,status:'RUNNING',at:now()});writeJson(journalFile(root,next.revision),j);
     try{
-      const result=await dispatch(root,config,state,next,opts);
+      const result=await dispatch(root,config,state,next,{...opts,paidCallsThisRevision});
       const outcome=result?.reused===true?'REUSED':result?.reusedSelectedAudio===true?'SELECTED_AUDIO_COPY':'WORK_PERFORMED';
       // Execution does not imply verification. QA and approval are separate.
       // Re-read persistent state and verify frozen Build again after dispatch.

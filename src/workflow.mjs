@@ -47,8 +47,8 @@ function decision(root,config,revision,source,analysisKey,skillsKey){
   const state=loadState(root),report=checkBuild(root,config,state);
   if(report.ready){
     const p=productionNext(root,config);
-    if(p.pending)return {...p,status:'RECOVERY_REQUIRED',kind:'production',stage:'production',owner:'OPERATOR',action:'Inspect production diagnose, then explicitly reconcile/retry through production step'};
-    return {...p,kind:'production',operation:p.kind||null,stage:'production',owner:p.status==='NEXT'?'BUNDLED_EXECUTOR':p.status==='REVIEW_REQUIRED'?'OPERATOR':'AGENT'};
+    if(p.pending)return {...p,productionRevision:p.revision||null,status:'RECOVERY_REQUIRED',kind:'production',stage:'production',owner:'OPERATOR',action:'Inspect production diagnose, then explicitly reconcile/retry through production step'};
+    return {...p,productionRevision:p.revision||null,kind:'production',operation:p.kind||null,stage:'production',owner:p.status==='NEXT'?'BUNDLED_EXECUTOR':p.status==='REVIEW_REQUIRED'?'OPERATOR':'AGENT'};
   }
   const analysis=cached(root,'analysis',analysisKey);
   if(!analysis)return local('analyze','intake','Inspect bounded repository signals; no code execution');

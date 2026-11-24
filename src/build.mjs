@@ -20,7 +20,7 @@ import {qualityPolicy} from './quality-policy.mjs';
 const SCHEMA=1;
 const files=['project-profile','feature-inventory','capability-profile','toolchain-lock',
   'creative-brief','storyboard','production-plan'];
-const actionTypes=new Set(['goto','click','fill','hover','waitFor','pause','scroll','screenshot',
+const actionTypes=new Set(['goto','click','fill','press','hover','waitFor','pause','scroll','screenshot',
   'assertVisible','assertText','assertAttribute','clickExpectResponse']);
 const assertionTypes=new Set(['assertVisible','assertText','assertAttribute','clickExpectResponse']);
 const versionedName=name=>name+'.json';

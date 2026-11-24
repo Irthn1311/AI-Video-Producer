@@ -15,7 +15,7 @@ const nonempty=(v,label,max=2000)=>{
   if(typeof v!=='string'||!v.trim()||v.length>max)throw Error('Invalid '+label);
 };
 const proposalPath=root=>path.join(avpDir(root),'planning','agent-storyboard.json');
-const actionTypes=new Set(['goto','click','fill','hover','waitFor','pause','scroll','screenshot','assertVisible','assertText','assertAttribute','clickExpectResponse']);
+const actionTypes=new Set(['goto','click','fill','press','hover','waitFor','pause','scroll','screenshot','assertVisible','assertText','assertAttribute','clickExpectResponse']);
 const roles=new Set(['hook','problem','workflow','result','conclusion','transition']);
 function checkPolicy(config){
   if(!validateDirector(config))throw Error('Configure creative.director before agent storyboard planning');

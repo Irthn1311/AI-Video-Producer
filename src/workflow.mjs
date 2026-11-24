@@ -37,7 +37,7 @@ function readJournal(root,revision){
 const policy={maxBuildSteps:100,maxAttemptsPerTask:3,maxObservedBuildMs:600000};
 function priority(s){
   // Prioritize risk, not a claim of verified complexity.
-  return (s.capture?.adapter?100:0)+(s.capture?.actions||[]).reduce((n,a)=>n+(['clickExpectResponse','pointerPath'].includes(a.type)?10:['fill','click'].includes(a.type)?3:0),0);
+  return (s.capture?.adapter?100:0)+(s.capture?.actions||[]).reduce((n,a)=>n+(['clickExpectResponse','pointerPath'].includes(a.type)?10:['fill','click','press'].includes(a.type)?3:0),0);
 }
 function sceneForIssue(config,issue){
   return config.scenes.find(s=>issue.message.startsWith(s.id+' ')||issue.message.startsWith(s.id+':'));

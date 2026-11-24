@@ -275,6 +275,8 @@
 
 > **Matched-input benchmark extension (CI pending):** existing two fixtures additionally run clean v2 full Production after the v2 repair; strict comparison binds plan, capture/voice inputs and actual voice bytes. Independent external intake pins two candidates; no execution/acceptance claimed. See `docs/external-benchmark-intake.md`.
 
+> **External TodoMVC integration pilot (CI pending):** source-derived keyboard interaction gap fixed; pinned upstream static browser assets, loopback-only execution namespace, actual workflow and scoped repair, artifact retention. Not blind independent agent evaluation or Vietnamese speech; JS Paint pending.
+
 - [ ] `E2-01` Tạo **MathMate Parity Benchmark**: canvas handwriting, desktop/mobile pairing, real OCR/feedback assertions, Remotion timing/inset, voice/captions, final QA — dùng dữ liệu test an toàn, tránh gọi API trả phí ở CI mặc định.
 - [ ] `E2-02` **Unknown App Benchmark**: ít nhất hai app khác MathMate, thuộc hai domain, có feature inventory, skill/tool selection, storyboard, real capture, final video, repair.
 - [ ] `E2-03` Benchmark Interactive và Autonomous, bao gồm thiếu skill, app thực sự lỗi, provider outage, corrupt artifact, stale source, failed approval.

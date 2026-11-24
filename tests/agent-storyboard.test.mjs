@@ -6,6 +6,9 @@ import path from 'node:path';
 import {readJson,writeJson,sha} from '../src/utils.mjs';
 import {storyboardContext,checkStoryboardProposal,applyStoryboardProposal,storyboardGate} from '../src/agent-storyboard.mjs';
 import {loadState,saveState} from '../src/state.mjs';
+import {checkBuild,requiresBuild} from '../src/build.mjs';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 function fixture(){
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'avp-storyboard-'));
   fs.mkdirSync(path.join(root,'app'));
@@ -74,5 +77,32 @@ test('cross-scene dependency is not mistaken for executable orchestration',()=>{
     applyStoryboardProposal(f.root,f.config,{confirm:true,expectedHash:report.proposalHash});
     const next=readJson(path.join(f.root,'project.json'));
     assert.equal(storyboardGate(next,f.proposal.sourceFingerprint)[0].code,'STORYBOARD_DEPENDENCY_UNSUPPORTED');
+  }finally{cleanup(f);}
+});
+
+test('CLI apply flows into canonical Build and blocks until real rehearsal',()=>{
+  const f=fixture();
+  try{
+    const cli=(...args)=>spawnSync(process.execPath,[fileURLToPath(new URL('../bin/avp.mjs',import.meta.url)),...args,'--project',f.root],{encoding:'utf8',timeout:30000});
+    const checked=cli('storyboard','check');
+    assert.equal(checked.status,0,checked.stderr);
+    const hash=JSON.parse(checked.stdout).proposalHash;
+    const applied=cli('storyboard','apply','--hash',hash,'--confirm');
+    assert.equal(applied.status,0,applied.stderr);
+    const prepared=cli('build','prepare','--force');
+    assert.equal(prepared.status,0,prepared.stderr);
+    const next=readJson(path.join(f.root,'project.json'));
+    const board=readJson(path.join(f.root,'.avp','build','storyboard.json'));
+    const plan=readJson(path.join(f.root,'.avp','build','production-plan.json'));
+    assert.equal(board.agentStoryboard.proposalHash,hash);
+    assert.equal(plan.scenes[0].id,'new-dashboard');
+    assert.equal(plan.agentStoryboardHash,sha(next.creative.storyboard));
+    const report=checkBuild(f.root,next,loadState(f.root));
+    assert.equal(report.status,'BLOCKED');
+    assert.ok(report.problems.some(x=>x.code==='BUILD_REHEARSAL_MISSING'));
+    assert.ok(report.reviewRequired.some(x=>x.code==='BUILD_CREATIVE_REVIEW_PENDING'));
+    delete next.creative.director;
+    assert.equal(requiresBuild(f.root,next),true);
+    assert.ok(storyboardGate(next,f.proposal.sourceFingerprint).some(x=>x.code==='STORYBOARD_POLICY_REQUIRED'));
   }finally{cleanup(f);}
 });

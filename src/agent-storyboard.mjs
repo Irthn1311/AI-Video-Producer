@@ -43,6 +43,7 @@ function validateFeatureRefs(features,scan){
   const indexed=new Map(scan.files.map(f=>[f.path,f.sha256])),result=new Map();
   for(const f of features){
     exact(f,['id','reason','sourceRefs'],'feature');
+    if(typeof f.id!=='string')throw Error('Feature ID must be a string');
     safeName(f.id);nonempty(f.reason,'feature.reason');
     if(result.has(f.id))throw Error('Duplicate feature '+f.id);
     if(!Array.isArray(f.sourceRefs)||!f.sourceRefs.length||f.sourceRefs.length>12)throw Error('Feature requires source references: '+f.id);
@@ -62,6 +63,7 @@ function inspectScenes(entries,features){
     exact(entry,['scene','role','purpose','startState','endState','fallback','dependsOn','direction'],'storyboard scene');
     const s=entry.scene;
     exact(s,['id','title','durationSec','featureIds','narration','capture','claims','edit','captionTiming'],'scene');
+    if(typeof s.id!=='string')throw Error('Scene ID must be a string');
     safeName(s.id);nonempty(s.title,'scene.title',160);
     if(seen.has(s.id))throw Error('Duplicate scene '+s.id);
     if(!roles.has(entry.role))throw Error('Invalid story role: '+s.id);
@@ -76,8 +78,8 @@ function inspectScenes(entries,features){
     }
     if(!Array.isArray(s.capture?.actions)||s.capture.actions.some(a=>!actionTypes.has(a?.type)))
       throw Error('Unsupported direct action in '+s.id+'; use a separately reviewed project adapter');
-    // A proposal cannot disable existing evidence safety by substituting a
-    // feature-less scene with unverified narration. Semantic review still needed.
+    // Keep page error checks enabled. Feature-less narration still requires
+    // independent semantic review; this cannot detect omitted claims.
     if(s.capture.evidencePolicy?.failOnPageError===false)throw Error('Agent storyboard cannot disable page-error checks');
     scenes.push(s);
     metadata.push({id:s.id,role:entry.role,purpose:entry.purpose,startState:entry.startState,
@@ -153,6 +155,8 @@ export function storyboardGate(config,sourceFingerprint){
   const s=config.creative?.storyboard;
   if(s===undefined)return [];
   const issues=[];
+  if(!config.creative?.director||config.verification?.mode!=='claims')
+    issues.push({code:'STORYBOARD_POLICY_REQUIRED',message:'Agent storyboard requires creative director and claim verification',action:'Restore the required policies before Build'});
   if(!record(s)||s.schemaVersion!==1||s.sourceFingerprint!==sourceFingerprint||s.sceneListHash!==sha(config.scenes)||
      !Array.isArray(s.scenes)||!Array.isArray(s.features)){
     issues.push({code:'STORYBOARD_PROVENANCE_STALE',message:'Agent storyboard source or scene list changed',action:'Author/check/apply a fresh storyboard proposal'});return issues;

@@ -11,6 +11,9 @@ Use when the user requests a video for a repository or application using AI Vide
 ## Preferred orchestration
 Use `avp workflow next/step` for new Build-gated projects; load only the relevant skill for each Agent handoff. Follow `docs/workflow.md`, `docs/production-quality.md`, and `docs/targeted-repair.md`. Obtain explicit user consent for launch/actions/paid calls and review decisions. In either mode, if `review.semantic=required`, inspect actual preview and audio and record the bound review before approval/render. For repair use the hash-bound repair plan and automatic checkpoint, not a full rerender. Benchmark per `docs/benchmark.md`; known fixtures are not unknown-app results. No automatic external skill execution or self-approval.
 
+## New target workspace
+Use `docs/agent-onboarding.md` and the source-linked init flags for a new app, not the dashboard sample. Observe `workflow next`, author the actual storyboard at `AGENT_REQUIRED`, and do not bypass required semantic review. The independent acceptance brief is for a separate Agent session, not an automatic CLI benchmark.
+
 ## Checklist
 1. Open `AGENTS.md`, `docs/quickstart.md`, the target project's brief/config. Run `node bin/avp.mjs doctor`.
 2. Load `repo-intelligence`; run `avp inspect` and gather targeted source/runtime evidence, avoiding full source dumps. If architectural relationships are complex, load the **bundled** `graphify` skill as needed and install its executable separately.

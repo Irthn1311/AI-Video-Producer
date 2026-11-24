@@ -1,0 +1,33 @@
+name: Cross-platform agent intake smoke
+on:
+  push:
+    branches: ['feat/agent-workspace-onboarding']
+  pull_request:
+    paths:
+      - 'src/agent-intake.mjs'
+      - 'bin/avp.mjs'
+      - 'src/agent-storyboard.mjs'
+      - 'src/workflow.mjs'
+      - 'src/production-executor.mjs'
+      - 'tests/agent-intake.test.mjs'
+      - '.github/workflows/agent-intake.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  intake:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test separate workspace and agent handoff (no app or provider calls)
+        run: node --test tests/agent-intake.test.mjs

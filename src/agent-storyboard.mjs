@@ -162,7 +162,7 @@ export function applyStoryboardProposal(root,config,{confirm=false,expectedHash}
 }
 export function storyboardGate(config,sourceFingerprint){
   const s=config.creative?.storyboard;
-  if(s===undefined)return [];
+  if(s===undefined)return config.creative?.director?[{code:'STORYBOARD_POLICY_REQUIRED',message:'Creative Director requires a current source-linked Agent storyboard',action:'Run storyboard context; author/check/apply a source-linked proposal before Build freeze'}]:[];
   const issues=[];
   if(!config.creative?.director||config.verification?.mode!=='claims')
     issues.push({code:'STORYBOARD_POLICY_REQUIRED',message:'Agent storyboard requires creative director and claim verification',action:'Restore the required policies before Build'});
@@ -170,6 +170,7 @@ export function storyboardGate(config,sourceFingerprint){
      !Array.isArray(s.scenes)||!Array.isArray(s.features)){
     issues.push({code:'STORYBOARD_PROVENANCE_STALE',message:'Agent storyboard source or scene list changed',action:'Author/check/apply a fresh storyboard proposal'});return issues;
   }
+  if(config.scenes.some(x=>x.id==='unplanned'))issues.push({code:'STORYBOARD_POLICY_REQUIRED',message:'Unplanned intake sentinel is not a production scene',action:'Replace the placeholder with actual source-linked scenes'});
   if(s.scenes.some(x=>!Array.isArray(x?.dependsOn)||x.dependsOn.length))
     issues.push({code:'STORYBOARD_DEPENDENCY_UNSUPPORTED',message:'Cross-scene runtime dependencies are not yet orchestrated',action:'Rehearse independent scenes with explicit setup, or implement dependency orchestration before Production'});
   return issues;

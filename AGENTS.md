@@ -48,6 +48,10 @@ Before claiming a feature was verified, read `docs/claim-evidence.md`. In `verif
 
 Read [workflow](docs/workflow.md), [production quality](docs/production-quality.md), [targeted repair](docs/targeted-repair.md) and [benchmark protocol](docs/benchmark.md). Drive `avp workflow next` and execute one exact `workflow step --hash HASH` only for NEXT. AGENT_REQUIRED means investigate or author a real proposal; REVIEW_REQUIRED or AUTHORIZATION_REQUIRED means obtain the specific operator decision, not manufacture it. Freeze explicitly. Review mode is not permission to bypass capture or paid consent; autonomous mode does not waive these checks. With `review.semantic=required`, inspect actual video/audio and record current declared semantic findings before scene/final approval. For a scoped repair, write the request and storyboard proposal, inspect `repair plan`, obtain exact hash approval, then `repair apply --hash HASH --confirm`; this path checkpoints and explicitly unlocks only the target. Reprepare/freeze and resume. Archive current accepted final. Do not claim shot-level independent capture, OS sandbox, forced alignment or autonomous semantic judgment. Measure via `telemetry` and `benchmark record` with accurate scope.
 
+## Fresh real-app workspace
+
+Prefer the source-linked `init DIR --source PATH --app-url URL --goal TEXT --audience TEXT` in `docs/agent-onboarding.md` instead of copying sample dashboard scenes. An unplanned workspace must stop at `AGENT_REQUIRED` until the Agent authors and applies a real source-linked storyboard. Do not claim a separate Agent run or cross-platform media support from the intake smoke.
+
 ## Mandatory sequence
 1. `avp doctor`, then `avp init <project-dir>` if needed.
 2. Read project brief/config. Run `avp inspect --project <project-dir>`; use `repo-intelligence` tiered retrieval. Do not dump entire codebase into context. Inspect source as read-only, exclude secrets.

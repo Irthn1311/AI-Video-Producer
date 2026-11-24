@@ -103,6 +103,8 @@
 
 ## A5. Storyboard, Scene/Shot Design & Rehearsal — P0
 
+> **F-04b first slice (PARTIAL; CI pending):** agent-authored storyboard can replace/add/reorder canonical scenes via bounded source context, source-file hash references, strict claim/recipe validation, explicit hash-confirmed apply and per-scene diff. Editorial roles/state/fallback metadata are recorded and bound to Build; locked scenes are protected. Cross-scene dependencies are recorded but block Build until orchestration exists. This is not automatic LLM story generation or proof of semantic truth, shot-level timing, runtime reset or unknown-app generalization. See `docs/agent-storyboard.md`. Keep A5 unchecked pending full acceptance.
+
 - [ ] `A5-01` Sinh storyboard theo features **đã khảo sát**, không hallucinate; claim → evidence conditions → scene IDs → shot IDs.
 - [ ] `A5-02` Định nghĩa scene/shot ID ổn định, thời lượng mục tiêu, narrator text, UI route, actions, reset state, assertions, capture markers và assets.
 - [ ] `A5-03` Thiết kế shot/camera plan, zoom, transitions, overlays, inset, callout, caption layout phù hợp đặc thù project — không dùng preset vô điều kiện.

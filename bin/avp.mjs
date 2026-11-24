@@ -16,6 +16,7 @@ import {snapshotScene,restoreSceneSnapshot,listSceneSnapshots} from '../src/revi
 import {prepareBuild,checkBuild,freezeBuild,requireBuildGate,requiresBuild} from '../src/build.mjs';
 import {rehearseScene} from '../src/rehearsal.mjs';
 import {creativeStatus,approveCreative} from '../src/creative-director.mjs';
+import {storyboardContext,checkStoryboardProposal,applyStoryboardProposal} from '../src/agent-storyboard.mjs';
 const apiSession={calls:0};
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 function usage(){console.log(`AI Video Producer v0.1 (local-first, software-demo)
@@ -36,6 +37,9 @@ Usage: avp <command> [--project DIR] [--scene ID] [options]
     --profile economy|balanced|quality (override project profile)
   plan [--force]             Write planning drafts (preserve edits unless forced)
   evidence                   Inspect coverage + claim evidence status (local-only)
+  storyboard context          Return bounded research context for agent-authored scenes
+  storyboard check            Validate local proposal and preview scene diff (no actions)
+  storyboard apply --hash HASH --confirm  Apply reviewed proposal to canonical project.json
   creative recommend|status   Show current editorial proposal, decisions and hash (no media/API calls)
   creative approve --hash HASH --confirm  Approve exact interactive creative brief
   build prepare [--force]    Generate canonical Build Package drafts (does not claim runtime verification)
@@ -126,6 +130,13 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
       throw Error('Use adapters init|status|approve|trial; see docs/project-adapters.md');
     }
     case 'evidence':console.log(JSON.stringify(inspectEvidence(root,config,state,{isCaptureStale:scene=>staleParts(scene,config,sceneState(state,scene.id),root).capture}),null,2));break;
+    case 'storyboard':{
+      const op=args._[1]||'context';
+      if(op==='context'){console.log(JSON.stringify(storyboardContext(root,config),null,2));break;}
+      if(op==='check'){console.log(JSON.stringify(checkStoryboardProposal(root,config),null,2));break;}
+      if(op==='apply'){console.log(JSON.stringify(applyStoryboardProposal(root,config,{confirm:args.confirm===true,expectedHash:args.hash}),null,2));break;}
+      throw Error('Use storyboard context|check|apply');
+    }
     case 'creative':{
       const op=args._[1]||'recommend';
       if(op==='recommend'||op==='status'){console.log(JSON.stringify(creativeStatus(root,config),null,2));break;}

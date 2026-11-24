@@ -150,6 +150,8 @@
 
 ## B1. Production Orchestrator & Scene Execution — P1
 
+> **F-05b (PARTIAL; pending CI):** typed capture/assertion/navigation, provider HTTP/network/auth/budget, media-tool, QA and Build drift failures with bounded journal metadata; recovery disposition and `production diagnose`; same-revision retry forbidden for Build/QA blockers, capture and interrupted retry requires explicit reset confirmation. Required production evidence checked before downstream execution. No automatic DOM repair, reset implementation, paid retry loop, general root-cause inference or global timeout.
+
 > **F-05a (PARTIAL; pending CI):** frozen-Build-bound `production next|step|recover`, allowlisted bundled dispatch, explicit capture/paid authorization, observed per-step journal and duration, one-step execution, review stops, bounded explicit retry and dead local executor lock recovery. Resume derives from current artifact integrity rather than journal success. No autonomous agent/model loop, global workspace locking against legacy CLI, automated app launch/reset, semantic QA, parallel/shot execution, or automatic error repair. See `docs/production-executor.md`.
 
 - [ ] `B1-01` Orchestrator đọc duy nhất **approved/frozen Build Package**, có run ID, progress, resumable state, per-scene/shot steps; không tự chỉnh storyboard.

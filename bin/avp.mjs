@@ -19,7 +19,7 @@ import {creativeStatus,approveCreative} from '../src/creative-director.mjs';
 import {storyboardContext,checkStoryboardProposal,applyStoryboardProposal} from '../src/agent-storyboard.mjs';
 import {auditionVoice,importAudition,listAuditions,chooseAudition,evaluateTiming} from '../src/voice-timing.mjs';
 import {visualStatus} from '../src/visual-direction.mjs';
-import {productionNext,productionStep,recoverProduction} from '../src/production-executor.mjs';
+import {productionNext,productionStep,recoverProduction,productionDiagnose} from '../src/production-executor.mjs';
 const apiSession={calls:0};
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 function usage(){console.log(`AI Video Producer v0.1 (local-first, software-demo)
@@ -69,7 +69,8 @@ Usage: avp <command> [--project DIR] [--scene ID] [options]
   preview --scene ID         Render scene with FFmpeg or scene.edit Remotion
   qa --scene ID              Probe scene media (technical QA)
   production next            Inspect next step of frozen Build (no execution)
-  production step [--allow-actions] [--allow-paid-api] [--retry-failed]  Execute one authorized step
+  production diagnose        Explain current typed failure and recovery policy
+  production step [--allow-actions] [--allow-paid-api] [--retry-failed] [--confirm-reset]  Execute one authorized step
   production recover --confirm  Recover a dead local executor lock; does not retry work
   run [--allow-paid-api]     Resume stale steps, respecting review gates
   render                     Concatenate approved scene previews (or Remotion)
@@ -144,9 +145,9 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
     case 'evidence':console.log(JSON.stringify(inspectEvidence(root,config,state,{isCaptureStale:scene=>staleParts(scene,config,sceneState(state,scene.id),root).capture}),null,2));break;
     case 'production':{
       const op=args._[1]||'next';
-      const result=op==='next'?productionNext(root,config):op==='step'?await productionStep(root,{allowActions:args['allow-actions']===true,allowPaidApi:args['allow-paid-api']===true,retryFailed:args['retry-failed']===true}):op==='recover'?recoverProduction(root,{confirm:args.confirm===true}):null;
-      if(!result)throw Error('Use production next|step|recover');
-      console.log(JSON.stringify(result,null,2));if(['BLOCKED','REVIEW_REQUIRED'].includes(result.status))process.exitCode=2;break;
+      const result=op==='next'?productionNext(root,config):op==='diagnose'?productionDiagnose(root,config):op==='step'?await productionStep(root,{allowActions:args['allow-actions']===true,allowPaidApi:args['allow-paid-api']===true,retryFailed:args['retry-failed']===true,confirmReset:args['confirm-reset']===true}):op==='recover'?recoverProduction(root,{confirm:args.confirm===true}):null;
+      if(!result)throw Error('Use production next|diagnose|step|recover');
+      console.log(JSON.stringify(result,null,2));if(['BLOCKED','REVIEW_REQUIRED','RECOVERY_REQUIRED'].includes(result.status))process.exitCode=2;break;
     }
     case 'visual':{
       if(args._[1]&&args._[1]!=='check')throw Error('Use visual check');

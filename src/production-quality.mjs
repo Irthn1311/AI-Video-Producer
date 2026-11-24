@@ -1,3 +1,4 @@
+import {cueEvidenceAlignment,captureToPreviewSec} from './cue-evidence-alignment.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -111,11 +112,12 @@ export function qualityScene(root,config,scene,{previewSec,captionInfo,captureRe
   const plan=scene.edit?readJson(path.join(dir,'edit-plan.json')):null;
   const timeline=evidenceTimeline(scene,markers,plan,previewSec,duration(capture),fps);
   const captions=captionReadability(captionInfo?.rows||[],scene.narration,p);
+  const cueAlignment=cueEvidenceAlignment(scene,markers,plan,captionInfo?.rows||[],previewSec,fps);
   const audio=config.voiceover?.enabled!==false?measureLoudness(file):null;
   const audioPass=!audio||(finite(audio.integratedLufs)&&finite(audio.truePeakDb)&&audio.truePeakDb<=0&&Math.abs(audio.integratedLufs-p.targetLufs)<=4);
   // Review candidates only. Approximate marker-derived times are useful for manual review, not semantic evidence.
   const times=[.1,previewSec/2,Math.max(0,previewSec-.15)];
-  if(!plan)for(const m of markers.evidence||[])times.push(m.endMs/1000+.1);
+  for(const m of markers.evidence||[]){const t=captureToPreviewSec(m.endMs/1000,plan,previewSec,fps);if(t!==null)times.push(t+.1);}
   if(plan)for(const s of plan.shots||[])times.push((s.fromFrame+Math.min(s.playFrames/2,s.durationFrames/2))/fps);
   const samples=[...new Set(times.map(t=>Math.round(Math.max(0,Math.min(previewSec-.1,t))*1000)))].sort((a,b)=>a-b).slice(0,8);
   const frameDir=path.join(dir,'quality-frames');fs.mkdirSync(frameDir,{recursive:true});
@@ -130,7 +132,7 @@ export function qualityScene(root,config,scene,{previewSec,captionInfo,captureRe
     approximatePostActionCaptureSec:round(Math.max(0,duration(capture)-markers.actionEndSec)),
     pointerActions:(captureReport.actions||[]).filter(a=>a.type==='pointerPath').map(a=>({index:a.index,measuredMs:a.endMs-a.startMs})),
     scope:'ADVISORY_APPROXIMATE_CAPTURE_CLOCK_NOT_EDITORIAL_JUDGMENT'}:null;
-  return {schemaVersion:1,previewHash,renderHash:render.renderHash,markers,timeline,captions,audio,frames,pacing,
+  return {schemaVersion:1,previewHash,renderHash:render.renderHash,markers,timeline,captions,audio,frames,pacing,...(cueAlignment?{cueAlignment}:{}),...(plan?.detail?{framing:{detail:plan.detail,scope:'DECLARED_DETAIL_WITH_FULL_SOURCE_OVERVIEW_NOT_VISIBILITY_PROOF'}}:{}),
     checks:{actionMarkers:markers.pass,evidenceTimeline:timeline.pass,captionReadability:captions.pass,audioQuality:audioPass,reviewFrames:frames.length>0},
     semanticStatus:'NOT_EVALUATED',reviewScope:'FRAME_CANDIDATES_AND_TECHNICAL_CHECKS_ONLY'};
 }

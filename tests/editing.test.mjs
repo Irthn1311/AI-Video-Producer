@@ -88,3 +88,10 @@ test('framed layout preserves source geometry and forbids overlays that would co
   const p=compileSceneEdit(s,{sources,fps:30});assert.equal(p.layout,'framed');assert.equal(p.shots[0].zoom,1);assert.equal(p.shots[0].playbackRate,1);assert.equal(p.shots[0].trimBefore,0);
   for(const invalid of [{callouts:[{text:'Overlay',startSec:1,durationSec:1}]},{chapter:''},{layout:'unknown'},{shots:[{...s.edit.shots[0],label:'overlay'}]},{shots:[{...s.edit.shots[0],playbackRate:2,editReason:'test'}]}])assert.throws(()=>validateSceneEdit({...s,edit:{...s.edit,...invalid}}));
 });
+
+test('framed detail region is bounded and keeps whole source layout available',()=>{
+  const s=scene({layout:'framed',chapter:'Focus',design:{rationale:'Enlarge the content, keep context',framing:'stable',theme:defaultVisualTheme},shots:[{id:'source',durationSec:8,camera:'static',purpose:'Show the actual source'}],detail:{x:.25,y:0,width:.5,height:.6}});
+  assert.deepEqual(compileSceneEdit(s,{sources,fps:30}).detail,s.edit.detail);
+  for(const detail of [{x:.7,y:0,width:.5,height:.5},{x:0,y:0,width:.01,height:.5},{...s.edit.detail,css:'body'}])assert.throws(()=>validateSceneEdit({...s,edit:{...s.edit,detail}}));
+  assert.throws(()=>validateSceneEdit({...s,edit:{...s.edit,layout:undefined}}));
+});

@@ -1,3 +1,4 @@
+import {cueEvidenceAlignment,captureToPreviewSec} from '../src/cue-evidence-alignment.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -53,4 +54,15 @@ test('duration-only repair invalidates silent-scene captions but preserves voice
   config.voiceover.enabled=true;
   const x=inputHashes(scene,config),y=inputHashes({...scene,durationSec:6},config);
   assert.equal(x.voice,y.voice);assert.equal(x.captions,y.captions);assert.notEqual(x.preview,y.preview);
+});
+
+test('cue evidence diagnostic maps edited source time and reports gaps, not speech verification',()=>{
+  const scene={edit:{syncAnchors:[{evidenceId:'result',cueText:'Kết quả.',maxOffsetSec:.3}]}},markers={pass:true,evidence:[{id:'result',endMs:3000}]};
+  const shot={file:'footage/capture.mp4',trimBefore:48,playFrames:48,playbackRate:2,fromFrame:24};
+  const plan={shots:[shot]},rows=[{text:'Kết quả.',startMs:1400,endMs:1800}];
+  assert.equal(captureToPreviewSec(3,plan,4,24),1.5);
+  assert.equal(cueEvidenceAlignment(scene,markers,plan,rows,4,24).within,1);
+  const late=cueEvidenceAlignment(scene,{pass:true,evidence:[{id:'result',endMs:5000}]},plan,rows,4,24);assert.equal(late.outside,1);assert.equal(late.results[0].signedGapSec,.7);
+  assert.equal(cueEvidenceAlignment(scene,markers,{shots:[shot,{...shot,fromFrame:72}]},rows,5,24).unresolved,1);
+  assert.equal(cueEvidenceAlignment(scene,markers,plan,[...rows,...rows],4,24).unresolved,1);
 });

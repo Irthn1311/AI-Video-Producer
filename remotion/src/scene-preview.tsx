@@ -9,7 +9,8 @@ type MediaShot={id?:string;camera?:string;transitionInFrames?:number;file:string
 type Inset=MediaShot&{x:number;y:number;width:number;height:number};
 type Callout={text:string;fromFrame:number;durationFrames:number;position:string};
 type Caption={startMs:number;endMs:number;text:string};
-type Plan={layout?:'framed';fps:number;durationInFrames:number;hasVoice:boolean;chapter:string|null;captionsBurned:boolean;
+type Region={x:number;y:number;width:number;height:number};
+type Plan={layout?:'framed';detail?:Region;fps:number;durationInFrames:number;hasVoice:boolean;chapter:string|null;captionsBurned:boolean;
   shots:MediaShot[];insets:Inset[];callouts:Callout[];captions:Caption[];theme?:Theme};
 type Props={plan:Plan};
 const empty:Plan={fps:30,durationInFrames:1,hasVoice:false,chapter:null,captionsBurned:true,shots:[],insets:[],callouts:[],captions:[]};
@@ -78,13 +79,30 @@ const InsetView:React.FC<{inset:Inset;theme:Theme}>=({inset,theme})=><AbsoluteFi
   <Media shot={inset}/>
 </AbsoluteFill>;
 // Non-overlapping regions: the capture is fitted, not cropped, inside the central stage.
+// Fit the selected rectangle from the SAME decoded source inside its own stage.
+const DetailMedia:React.FC<{shot:MediaShot;region:Region}>=({shot,region})=>{
+  const {width,height}=useVideoConfig();
+  const stageWidth=width*.65-2,stageHeight=height*.72-2;
+  const scale=Math.min(stageWidth/(width*region.width),stageHeight/(height*region.height));
+  const rw=width*region.width*scale,rh=height*region.height*scale;
+  return <AbsoluteFill style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
+    <div style={{position:'relative',width:rw,height:rh,overflow:'hidden'}}>
+      <div style={{position:'absolute',width:width*scale,height:height*scale,left:-region.x*width*scale,top:-region.y*height*scale}}>
+        <Media shot={shot}/>
+      </div>
+    </div>
+  </AbsoluteFill>;
+};
 const FramedScene:React.FC<Props>=({plan})=>{
   const theme=plan.theme||defaultTheme,{width,height}=useVideoConfig();
   return <AbsoluteFill style={{background:theme.background,fontFamily:'Arial, Noto Sans, sans-serif'}}>
     <div style={{position:'absolute',left:'3%',right:'3%',top:'1%',height:'10%',display:'flex',alignItems:'center',paddingLeft:width*.015,boxSizing:'border-box',background:theme.panel,color:theme.text,fontSize:Math.max(12,height*.034),fontWeight:700,borderRadius:Math.max(4,height*.01)}}>{plan.chapter}</div>
-    <div style={{position:'absolute',left:'3%',right:'3%',top:'12%',bottom:'16%',overflow:'hidden',background:theme.background,borderRadius:Math.max(4,height*.01),border:'1px solid '+theme.accent}}>
-      {plan.shots.map((shot,i)=><Sequence key={shot.id||'shot-'+i} from={shot.fromFrame} durationInFrames={shot.durationFrames}><Camera shot={shot} theme={theme}/></Sequence>)}
+    <div style={{position:'absolute',left:'3%',right:plan.detail?'32%':'3%',top:'12%',bottom:'16%',overflow:'hidden',background:theme.background,borderRadius:Math.max(4,height*.01),border:'1px solid '+theme.accent}}>
+      {plan.shots.map((shot,i)=><Sequence key={shot.id||'shot-'+i} from={shot.fromFrame} durationInFrames={shot.durationFrames}>{plan.detail?<DetailMedia shot={shot} region={plan.detail}/>:<Camera shot={shot} theme={theme}/>}</Sequence>)}
     </div>
+    {plan.detail?<div style={{position:'absolute',left:'70%',right:'3%',top:'12%',bottom:'16%',overflow:'hidden',border:'1px solid '+theme.accent,borderRadius:Math.max(4,height*.01)}}>
+      {plan.shots.map((shot,i)=><Sequence key={'overview-'+(shot.id||i)} from={shot.fromFrame} durationInFrames={shot.durationFrames}><Camera shot={shot} theme={theme}/></Sequence>)}
+    </div>:null}
     {plan.hasVoice?<Audio src={staticFile('voice.wav')} volume={1}/>:null}
     {plan.captionsBurned?<CaptionLayer captions={plan.captions} theme={theme} framed/>:null}
   </AbsoluteFill>;

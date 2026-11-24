@@ -11,8 +11,8 @@ import {readJson,writeJson,fileHash,sceneDir} from '../src/utils.mjs';
 const exec=promisify(execFile),repo=path.resolve(import.meta.dirname,'..');
 const pin='ff43b02e59dfa604386bb382034b2cd07c2bcd8a';
 if(process.env.AVP_EXTERNAL_ISOLATED!=='1')throw Error('Use reviewed isolated external pilot workflow');
-const mode=process.argv[4]||'baseline';if(!['baseline','story'].includes(mode))throw Error('Invalid TodoMVC pilot mode');
-const story=mode==='story';
+const mode=process.argv[4]||'baseline';if(!['baseline','story','focus'].includes(mode))throw Error('Invalid TodoMVC pilot mode');
+const focus=mode==='focus',story=mode!=='baseline';
 const upstream=path.resolve(process.argv[2]),destination=path.resolve(process.argv[3]);
 assert.equal(execFileSync('git',['-C',upstream,'rev-parse','HEAD'],{encoding:'utf8'}).trim(),pin);
 const app=path.join(upstream,'examples','react'),root=fs.mkdtempSync(path.join(os.tmpdir(),'avp-todomvc-'));
@@ -91,6 +91,14 @@ try{
       createScene('filter','03 / 04 · Theo dõi tiến độ','Tách việc đang làm khỏi việc đã xong bằng hai bộ lọc. Bạn dễ dàng theo dõi tiến độ.',filters,['active-task','completed-task']),
       createScene('cleanup','04 / 04 · Dọn danh sách','Cuối cùng, xóa những việc đã hoàn thành. Chỉ giữ lại việc còn phải làm.',clear,['remaining-task','remaining-count'])
     ].map(s=>({...s,durationSec:9,edit:{layout:'framed',chapter:s.title,design:{rationale:'Keep the whole real app visible between separate title and caption lanes.',framing:'stable',theme},shots:[{id:'app-view',source:'capture',durationSec:9,camera:'static',purpose:'Show actual app state and verified actions'}]}}));
+    if(focus){
+      const anchors={create:[['task-added','nhấn Enter.']],complete:[['done-count','số việc còn lại.']],filter:[['active-task','hai bộ lọc.'],['completed-task','theo dõi tiến độ.']],cleanup:[['remaining-count','việc còn phải làm.']]};
+      // Approximate focus region inferred from actual PR37 frame; full source always remains in adjacent overview.
+      scenes=scenes.map(s=>({...s,edit:{...s.edit,detail:{x:.235,y:.015,width:.53,height:.62},syncAnchors:anchors[s.id].map(([evidenceId,cueText])=>({evidenceId,cueText,maxOffsetSec:.5}))}}));
+      // Give the first spoken instruction time to start before committing the new task. Still real UI actions.
+      const create=scenes[0].capture.actions,enter=create.findIndex(a=>a.type==='press');create[enter-1].ms=2300;
+      const complete=scenes[1].capture.actions,click=complete.findIndex(a=>a.type==='click');complete[click-1].ms=1700;
+    }
     refs.push({id:'filter',reason:'Active and Completed routes separate task state',sourceRefs:[ref('src/todo/components/footer.jsx')]},{id:'cleanup',reason:'Remove completed reducer and footer button',sourceRefs:[ref('src/todo/reducer.js'),ref('src/todo/components/footer.jsx')]});
   }
   const entry=(scene,role)=>({scene,role,purpose:scene.title,startState:'Fresh isolated browser storage',endState:'Declared UI assertions pass',fallback:'Return to Build',dependsOn:[],direction:{}});
@@ -142,7 +150,9 @@ try{
   stage='export';fs.mkdirSync(destination,{recursive:true});
   for(const name of ['final.mp4','final.srt','final-qa.json','final-report.json'])copyRegular(path.join(root,'.avp','output',name),path.join(destination,name));
   copyRegular(path.join(root,'.avp','releases',prior.releaseId,'final.mp4'),path.join(destination,'previous.mp4'));
-  const result={status:'TECHNICAL_PASS',mode,selected,scope:'SOURCE_DERIVED_EXTERNAL_SCRIPTED_PILOT_NOT_BLIND',sourceRevision:pin,full,repair,comparison,semantic:'NOT_INDEPENDENTLY_EVALUATED',voice:story?'ESPEAK_NG_LOCAL_SYNTHETIC_VI_SGN_NOT_LISTENING_VERIFIED':'DISABLED'};
+  const diagnostics=focus?scenes.map(s=>{const q=readJson(path.join(sceneDir(root,s.id),'qa-report.json')).quality;assert.ok(q.framing?.detail);assert.ok(q.cueAlignment?.results?.length);return {sceneId:s.id,framing:q.framing,cueAlignment:q.cueAlignment};}):[];
+  if(focus)assert.equal(diagnostics.flatMap(s=>s.cueAlignment.results).length,5);
+  const result={status:'TECHNICAL_PASS',mode,selected,diagnostics,scope:'SOURCE_DERIVED_EXTERNAL_SCRIPTED_PILOT_NOT_BLIND',sourceRevision:pin,full,repair,comparison,semantic:'NOT_INDEPENDENTLY_EVALUATED',voice:story?'ESPEAK_NG_LOCAL_SYNTHETIC_VI_SGN_NOT_LISTENING_VERIFIED':'DISABLED'};
   writeJson(path.join(destination,'pilot-report.json'),result);console.log('AVP_EXTERNAL_PILOT '+JSON.stringify(result));
 }catch(e){console.error('AVP_EXTERNAL_BLOCKER '+JSON.stringify({stage,message:String(e.message).slice(0,1500)}));throw e;}
 finally{if(server.listening)await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});}

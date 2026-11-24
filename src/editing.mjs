@@ -108,6 +108,21 @@ export function validateSceneEdit(scene){
     if(edit.callouts?.length||edit.insets?.length||edit.shots.some(s=>sourceName(s.source)!=='capture'||s.label||s.transitionIn||s.camera!=='static'||(s.zoom??1)!==1||(s.playbackRate??1)!==1))
       throw Error('Framed layout reserves non-overlapping title, source and caption zones; only static unlabelled capture shots at normal speed are allowed');
   }
+  if(edit.detail!==undefined){
+    if(edit.layout!=='framed')throw Error('Detail view requires framed layout');
+    fields(edit.detail,['x','y','width','height'],'detail');
+    finite(edit.detail.x,0,1,'detail.x');finite(edit.detail.y,0,1,'detail.y');
+    finite(edit.detail.width,.2,1,'detail.width');finite(edit.detail.height,.2,1,'detail.height');
+    if(edit.detail.x+edit.detail.width>1.000001||edit.detail.y+edit.detail.height>1.000001)throw Error('Detail region exceeds source frame');
+  }
+  if(edit.syncAnchors!==undefined){
+    if(!Array.isArray(edit.syncAnchors)||!edit.syncAnchors.length||edit.syncAnchors.length>20)throw Error('syncAnchors must contain 1–20 cue/evidence pairs');
+    const seen=new Set();
+    for(const a of edit.syncAnchors){fields(a,['evidenceId','cueText','maxOffsetSec'],'sync anchor');assetName(a.evidenceId);text(a.cueText,100,'sync cueText');finite(a.maxOffsetSec,0,3,'sync maxOffsetSec');
+      if(!scene.narration.normalize('NFC').includes(a.cueText.normalize('NFC')))throw Error('sync cueText must occur in narration');
+      if(seen.has(a.evidenceId))throw Error('Duplicate sync evidenceId');seen.add(a.evidenceId);
+    }
+  }
   if(edit.insets!==undefined){
     if(!Array.isArray(edit.insets)||edit.insets.length>4)throw Error('edit.insets must be an array of at most 4');
     for(const [i,v] of edit.insets.entries()){
@@ -184,6 +199,6 @@ export function compileSceneEdit(scene,{sources,fps,voiceDurationSec=0,captions=
     fromFrame:Math.round(c.startSec*fps),durationFrames:frames(c.durationSec,fps),position:c.position||'top-right'}));
   return {
     fps,durationInFrames:targetFrames,hasVoice,chapter:edit.chapter||null,
-    ...(edit.layout?{layout:edit.layout}:{}),captionsBurned,shots,insets,callouts,captions,theme:edit.design?.theme||defaultVisualTheme
+    ...(edit.layout?{layout:edit.layout}:{}),...(edit.detail?{detail:{...edit.detail}}:{}),captionsBurned,shots,insets,callouts,captions,theme:edit.design?.theme||defaultVisualTheme
   };
 }

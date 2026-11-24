@@ -5,6 +5,7 @@ import {scanSource} from './inspect.mjs';
 import {analyzeProject} from './project-intelligence.mjs';
 import {makeCreativeBrief,validateDirector} from './creative-director.mjs';
 import {loadState} from './state.mjs';
+import {shotDiff,visualStatus} from './visual-direction.mjs';
 
 const record=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const exact=(v,allowed,label)=>{
@@ -116,6 +117,7 @@ function compile(root,config,proposal){
     features:[...features.values()],scenes:metadata,sceneListHash:sha(next.scenes)};
   // No change to budget, app URL, review, provider, environment or permissions.
   assertConfig(next);validateDirector(next);
+  const visual=visualStatus(next);if(visual.problems.length)throw Error(visual.problems.map(x=>x.message).join('; '));
   if(next.creative.director.maxDurationSec!=null&&duration(next)>next.creative.director.maxDurationSec)
     throw Error('Proposed storyboard exceeds creative maximum duration');
   if(Object.keys(config.production?.sceneDependencies||{}).length)
@@ -130,7 +132,8 @@ function diff(before,after){
     changed:[...fresh.keys()].filter(id=>old.has(id)&&(sha(old.get(id))!==sha(fresh.get(id))||sha(direction(before,id))!==sha(direction(after,id)))),
     unchanged:[...fresh.keys()].filter(id=>old.has(id)&&sha(old.get(id))===sha(fresh.get(id))&&sha(direction(before,id))===sha(direction(after,id))),
     orderChanged:sha([...old.keys()])!==sha([...fresh.keys()]),
-    durationBeforeSec:duration(before),durationAfterSec:duration(after)};
+    durationBeforeSec:duration(before),durationAfterSec:duration(after),
+    shotChanges:Object.fromEntries([...fresh.keys()].filter(id=>old.has(id)).map(id=>[id,shotDiff(old.get(id),fresh.get(id))]).filter(([,v])=>v!==null))};
 }
 export function checkStoryboardProposal(root,config){
   const proposal=readJson(proposalPath(root)),next=compile(root,config,proposal);

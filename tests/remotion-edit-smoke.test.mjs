@@ -31,10 +31,11 @@ test('actual Remotion scene edit renders authentic-source MP4, keeps audio track
     config.scenes=[{
       ...config.scenes[0],id:'edited-demo',durationSec:4,narration:'Real demo scene.',
       edit:{
-        chapter:'MathMate parity',
+        chapter:'Composition smoke',
+        design:{rationale:'Render context and detail',framing:'adaptive',theme:{background:'#101820',panel:'#1B263B',text:'#FFFFFF',accent:'#70D6FF'}},
         shots:[
-          {durationSec:1.5,trimStartSec:.25,zoom:1.05,focus:{x:.65,y:.4},label:'Live UI'},
-          {durationSec:2.5,trimStartSec:1.5,trimEndSec:2.5,playbackRate:1.25}
+          {id:'context',durationSec:1.5,trimStartSec:.25,zoom:1.05,focus:{x:.65,y:.4},label:'Live UI',camera:'push',purpose:'Context',editReason:'Trim fixture lead-in',transitionIn:{type:'fade',durationSec:.2}},
+          {id:'result',durationSec:2.5,trimStartSec:1.5,trimEndSec:2.5,playbackRate:1.25,camera:'static',purpose:'Result',editReason:'Exercise accelerated source and hold'}
         ],
         insets:[{asset:'mobile',startSec:.5,durationSec:2,x:.7,y:.1,width:.25,height:.75,label:'Mobile'}],
         callouts:[{text:'Verified scene test',startSec:1,durationSec:1.5,position:'top-right'}]
@@ -58,6 +59,9 @@ test('actual Remotion scene edit renders authentic-source MP4, keeps audio track
     assert.equal(qa.pass,true,JSON.stringify(qa));
     const plan=readJson(path.join(sceneDir(root,'edited-demo'),'edit-plan.json'));
     assert.equal(plan.durationInFrames,96);
+    assert.deepEqual(plan.shots.map(s=>s.id),['context','result']);
+    assert.equal(plan.shots[0].camera,'push');assert.equal(plan.shots[0].transitionInFrames,5);
+    assert.equal(plan.theme.panel,'#1B263B');
     const preview=path.join(sceneDir(root,'edited-demo'),'preview.mp4');
     assert.ok(fs.statSync(preview).size>3000);
     const probe=JSON.parse(execute('ffprobe',['-v','error','-show_streams','-show_format','-of','json',preview]));

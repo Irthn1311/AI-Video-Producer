@@ -147,20 +147,23 @@ export function writeFinalAudit(root,config,state,output,report){
   const p=qualityPolicy(config);if(!p)return null;
   const dir=path.join(avpDir(root),'output'),scenes=[],rows=[];let offsetMs=0;
   for(const s of config.scenes){
-    const d=sceneDir(root,s.id),ss=state.scenes[s.id],preview=path.join(d,'preview.mp4'),ms=Math.round(duration(preview)*1000);
+    const d=sceneDir(root,s.id),ss=state.scenes[s.id],preview=path.join(d,'preview.mp4'),seg=report.assembly?.segments.find(x=>x.kind==='scene'&&x.sceneId===s.id);
+    if(report.assembly&&!seg)throw Error('Assembly scene missing from audit');
+    if(seg)offsetMs=Math.round(seg.fromFrame/report.assembly.policy.fps*1000);
+    const ms=seg?Math.round((seg.fromFrame+seg.durationFrames)/report.assembly.policy.fps*1000)-offsetMs:Math.round(duration(preview)*1000);
     const info=readJson(path.join(d,'captions.json')),qa=readJson(path.join(d,'qa-report.json'));
     const row={sceneId:s.id,startMs:offsetMs,durationMs:ms,previewHash:ss.artifacts.preview.hash,qaHash:ss.qa.reportHash,
       claimIds:(s.claims||[]).map(c=>c.id),captureHash:ss.artifacts.capture?.hash,voiceHash:ss.artifacts.voice?.hash||null,
       captionsHash:ss.artifacts.captions?.hash,semanticStatus:qa.quality?.semanticStatus||'NOT_EVALUATED'};
     scenes.push(row);
-    for(const c of info.rows||[])rows.push({startMs:offsetMs+c.startMs,endMs:offsetMs+c.endMs,text:c.text});
+    for(const c of info.rows||[]){if(seg&&c.endMs>ms+1)throw Error('Caption exceeds approved scene segment');rows.push({startMs:offsetMs+c.startMs,endMs:offsetMs+c.endMs,text:c.text});}
     offsetMs+=ms;
   }
   const srt=path.join(dir,'final.srt'),audit=path.join(dir,'final-report.json');
   if(rows.some(x=>x.endMs>Math.round(report.durationSec*1000)+300))throw Error('Global caption timeline exceeds actual final duration');
   atomicWrite(srt,rows.map((c,i)=>String(i+1)+'\n'+stamp(c.startMs)+' --> '+stamp(c.endMs)+'\n'+c.text+'\n').join('\n'));
   writeJson(audit,{schemaVersion:1,outputHash:report.outputHash,policy:p,durationSec:report.durationSec,sceneTimeline:scenes,
-    globalCaptionsHash:fileHash(srt),captionTimingScope:'SCENE_PREVIEW_DURATION_OFFSETS_ESTIMATED_ALIGNMENT',
+    globalCaptionsHash:fileHash(srt),...(report.assembly?{assembly:report.assembly}:{}),captionTimingScope:report.assembly?'MEASURED_FRAME_SEGMENT_OFFSETS_WITH_SILENT_TRANSITIONS':'SCENE_PREVIEW_DURATION_OFFSETS_ESTIMATED_ALIGNMENT',
     estimatedProviderReservations:state.budget||{},actualBilledUsd:null,semanticReview:'NOT_EVALUATED_BY_AUTOMATION'});
   return {auditHash:fileHash(audit),globalCaptionsHash:fileHash(srt)};
 }

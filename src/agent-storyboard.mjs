@@ -1,3 +1,4 @@
+import {plannedAssemblySec} from './assembly-policy.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {avpDir,readJson,writeJson,sha,safeName,assertConfig} from './utils.mjs';
@@ -90,7 +91,7 @@ function inspectScenes(entries,features){
   if(used.size!==features.size)throw Error('All selected features must be used in at least one scene');
   return {scenes,metadata};
 }
-function duration(config){return config.scenes.reduce((sum,s)=>sum+s.durationSec,0);}
+function duration(config){return plannedAssemblySec(config);}
 function checkLocked(root,current,next,repairTarget=null){
   const state=loadState(root),before=new Map(current.scenes.map(s=>[s.id,s])),after=new Map(next.scenes.map(s=>[s.id,s]));
   for(const [id,ss] of Object.entries(state.scenes||{})){

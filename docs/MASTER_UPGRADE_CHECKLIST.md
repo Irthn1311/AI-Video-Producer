@@ -283,6 +283,8 @@
 
 > **PR35 verified; framed story candidate (CI pending):** actual Vietnamese synthetic speech and paced pointer QA pass; sampled video still screen-recording-like. New opt-in non-overlapping framed layout and four-scene 36s TodoMVC story variant, capture-timing repair preserving target audio/captions and all unaffected scenes, external regression matrix. Independent semantic, natural speech and true transition system remain open.
 
+> **PR36 story verified; additive scene transition candidate (CI pending):** actual 36s story and targeted recapture preserve 14/16 media. Sampled frames show small app content and abrupt resets. Opt-in silent boundary-frame crossfade with measured frame timeline, global subtitle offsets and exact source hashes; real media test and external story regression. No overlapping live crossfade or independent semantic acceptance.
+
 - [ ] `E2-01` Tạo **MathMate Parity Benchmark**: canvas handwriting, desktop/mobile pairing, real OCR/feedback assertions, Remotion timing/inset, voice/captions, final QA — dùng dữ liệu test an toàn, tránh gọi API trả phí ở CI mặc định.
 - [ ] `E2-02` **Unknown App Benchmark**: ít nhất hai app khác MathMate, thuộc hai domain, có feature inventory, skill/tool selection, storyboard, real capture, final video, repair.
 - [ ] `E2-03` Benchmark Interactive và Autonomous, bao gồm thiếu skill, app thực sự lỗi, provider outage, corrupt artifact, stale source, failed approval.

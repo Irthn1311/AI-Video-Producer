@@ -1,7 +1,7 @@
 name: External TodoMVC pilot
 on:
   push:
-    branches: ['test/external-todomvc-pilot','test/framed-story-demo']
+    branches: ['test/external-todomvc-pilot','test/framed-story-demo','feat/additive-scene-transitions']
   pull_request:
     paths:
       - 'benchmarks/external-todomvc.mjs'
@@ -9,6 +9,9 @@ on:
       - 'src/capture-actions.mjs'
       - 'src/capture-assertions.mjs'
       - 'src/editing.mjs'
+      - 'src/assembly.mjs'
+      - 'src/assembly-policy.mjs'
+      - 'src/production-quality.mjs'
       - 'remotion/src/scene-preview.tsx'
   workflow_dispatch:
 permissions:

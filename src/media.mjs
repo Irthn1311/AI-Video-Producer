@@ -1,3 +1,5 @@
+import {assemblyPolicy} from './assembly-policy.mjs';
+import {renderAssembly} from './assembly.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -169,13 +171,13 @@ export function qaScene(root,config,scene,state){
   const reportFile=path.join(dir,'qa-report.json');writeJson(reportFile,report);ss.qa={reportHash:fileHash(reportFile),previewHash:report.previewHash,previewInputHash:report.previewInputHash};ss.approved=false;
   invalidateOutput(state);saveState(root,state);return report;
 }
-function finalReport(root,config,state,engine,file){
+function finalReport(root,config,state,engine,file,assembly=null){
   const p=probe(file),v=p.streams.find(x=>x.codec_type==='video'),a=p.streams.find(x=>x.codec_type==='audio');
   const sourceDurations=config.scenes.map(s=>mediaSeconds(path.join(sceneDir(root,s.id),'preview.mp4')));
-  const target=sourceDurations.reduce((a,b)=>a+b,0),actual=mediaSeconds(file);
+  const target=assembly?.durationSec??sourceDurations.reduce((a,b)=>a+b,0),actual=mediaSeconds(file);
   run('ffmpeg',['-v','error','-i',file,'-f','null','-']);
   const checks={videoH264:v?.codec_name==='h264',audioAAC:a?.codec_name==='aac',width:v?.width===(config.render?.width||1920),height:v?.height===(config.render?.height||1080),duration:Math.abs(actual-target)<1,fullDecode:true};
-  const report={schemaVersion:2,engine,file,durationSec:actual,scenes:config.scenes.length,checks,pass:Object.values(checks).every(Boolean),outputHash:fileHash(file),humanFinalApproval:false};
+  const report={schemaVersion:2,engine,file,durationSec:actual,scenes:config.scenes.length,...(assembly?{assembly}:{}),checks,pass:Object.values(checks).every(Boolean),outputHash:fileHash(file),humanFinalApproval:false};
   if(!report.pass)throw new ExecutionError('FINAL_QA_FAILED','Final render failed technical QA',{failedChecks:Object.keys(checks).filter(k=>!checks[k])});
   if(semanticPolicy(config))report.semanticReceipts=Object.fromEntries(config.scenes.map(s=>[s.id,requireSemanticReview(root,config,s,validateSceneQa(root,config,s,state)).receiptHash]));
   const audit=writeFinalAudit(root,config,state,file,report);if(audit)report.qualityExport=audit;
@@ -194,6 +196,11 @@ export function render(root,config,state,opts={}){
     requireSemanticReview(root,config,s,qa);
     if(config.review.mode==='review')sceneApprovalValid(root,config,s,state);
     previews.push(path.join(sceneDir(root,s.id),'preview.mp4'));
+  }
+  if(assemblyPolicy(config)){
+    const out=path.join(outDir,'final.mp4'),tmp=path.join(outDir,'final.transition.new.mp4');
+    try{const timeline=renderAssembly(config,previews,tmp);fs.renameSync(tmp,out);return finalReport(root,config,state,'ffmpeg-additive-transitions',out,timeline);}
+    finally{fs.rmSync(tmp,{force:true});}
   }
   if(config.render?.engine==='remotion')return renderRemotion(root,config,state,opts);
   const list=path.join(outDir,'concat.txt');fs.writeFileSync(list,previews.map(f=>`file '${f.replaceAll("'", "'\\''")}'`).join('\n')+'\n');

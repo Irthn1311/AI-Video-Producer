@@ -1,3 +1,4 @@
+import {assemblyPolicy} from './assembly-policy.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {available,avpDir,readJson,writeJson,sha,fileHash,loadEnv} from './utils.mjs';
@@ -143,6 +144,7 @@ function makeArtifacts(root,config){
     projectConfigHash:sha(config),toolchainHash:sha(toolchain),
     features:features.map(x=>x.id),
     render:config.render,language:config.language,review:config.review,
+    ...(assemblyPolicy(config)?{assembly:assemblyPolicy(config)}:{}),
     ...(qualityPolicy(config)?{productionQuality:qualityPolicy(config)}:{}),
     maxEstimatedUsd:config.budget?.maxEstimatedUsd??null,
     dependencies:config.production?.sceneDependencies||{},

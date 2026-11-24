@@ -55,7 +55,8 @@ try{
     config.language={script:'vi',narration:'vi-VN',subtitles:['vi']};
     config.voiceover.style='Local synthetic Vietnamese integration speech; no provider call';
     config.render={engine:'ffmpeg',width:1280,height:720,fps:24,captionsBurned:true};
-    config.creative={audience:'Người mới cần quản lý công việc trong ngày',goal:'Từ ghi công việc đến hoàn thành và dọn danh sách',director:{mode:'autonomous',visualStyle:'Framed product walkthrough, no overlays on the UI',targetDurationSec:36,maxDurationSec:40},timing:{maxSilenceSec:2,actionToleranceSec:.25},visual:{consistentTheme:true}};
+    config.assembly={transition:{type:'crossfade-hold',durationSec:.5}};
+    config.creative={audience:'Người mới cần quản lý công việc trong ngày',goal:'Từ ghi công việc đến hoàn thành và dọn danh sách',director:{mode:'autonomous',visualStyle:'Framed product walkthrough, no overlays on the UI',targetDurationSec:37.5,maxDurationSec:40},timing:{maxSilenceSec:2,actionToleranceSec:.25},visual:{consistentTheme:true}};
   }
   writeJson(path.join(root,'project.json'),config);
   stage='source-analysis';await dispatch('analyze');await dispatch('skills');
@@ -130,6 +131,14 @@ try{
   const repair=await cli('benchmark','record','--label','todomvc-repair','--kind','repair','--scope','external','--confirm');
   assert.equal(repair.reservedCallsDelta,0);if(story){assert.ok(repair.regeneratedCaptureSec>0);assert.equal(repair.scenes.filter(s=>s.artifactStatus.capture==='EXECUTED').length,1);assert.equal(repair.scenes.find(s=>s.sceneId===targetId).artifactStatus.voice,'PRESERVED');}else assert.equal(repair.regeneratedCaptureSec,0);
   const comparison=await cli('benchmark','compare','--full',full.id,'--repair',repair.id);assert.equal(comparison.status,'UNMATCHED_INPUT_OBSERVATION');
+  if(story){
+    const audit=readJson(path.join(root,'.avp','output','final-report.json')),segments=audit.assembly.segments;
+    assert.equal(segments.filter(s=>s.kind==='transition').length,3);
+    assert.equal(segments.filter(s=>s.kind==='scene').length,4);
+    for(const s of audit.sceneTimeline){const seg=segments.find(x=>x.sceneId===s.sceneId);assert.equal(s.startMs,Math.round(seg.fromFrame/audit.assembly.policy.fps*1000));}
+    assert.ok(Math.abs(repair.finalDurationSec-audit.assembly.durationSec)<.12);
+    assert.equal(repair.scenes.filter(s=>s.artifactStatus.preview==='EXECUTED').length,1);
+  }
   stage='export';fs.mkdirSync(destination,{recursive:true});
   for(const name of ['final.mp4','final.srt','final-qa.json','final-report.json'])copyRegular(path.join(root,'.avp','output',name),path.join(destination,name));
   copyRegular(path.join(root,'.avp','releases',prior.releaseId,'final.mp4'),path.join(destination,'previous.mp4'));

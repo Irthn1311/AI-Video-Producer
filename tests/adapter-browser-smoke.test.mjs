@@ -26,9 +26,14 @@ test('real browser adapter review → trial → frozen Build → authentic captu
     res.writeHead(200,{'Content-Type':'text/html'});
     res.end('<!doctype html><html><body><h1>Project-owned App</h1>'+
       '<button data-testid="save">Save changes</button>'+
+      '<canvas data-testid="canvas" data-drawn="no" width="200" height="55"></canvas>'+
       '<div data-testid="result" style="display:none">Saved real data</div>'+
       '<img src="http://127.0.0.1:'+other.address().port+'/unauthorized" />'+
-      '<script>document.querySelector("[data-testid=save]").onclick=async()=>{'+
+      '<script>const c=document.querySelector("canvas"),ctx=c.getContext("2d");let drawing=false;'+
+      'c.addEventListener("pointerdown",e=>{drawing=true;ctx.beginPath();ctx.moveTo(e.offsetX,e.offsetY)});'+
+      'c.addEventListener("pointermove",e=>{if(drawing){ctx.lineTo(e.offsetX,e.offsetY);ctx.stroke();c.dataset.drawn="yes"}});'+
+      'c.addEventListener("pointerup",()=>drawing=false);'+
+      'document.querySelector("[data-testid=save]").onclick=async()=>{'+
       'const r=await fetch("/api/save",{method:"POST"});'+
       'if(r.ok)document.querySelector("[data-testid=result]").style.display="block";'+
       '};</script></body></html>');
@@ -43,7 +48,7 @@ test('real browser adapter review → trial → frozen Build → authentic captu
     config.appUrl='http://127.0.0.1:'+server.address().port;
     config.voiceover.enabled=false;config.review.mode='autonomous';config.verification={mode:'claims'};
     config.render={engine:'ffmpeg',width:320,height:180,fps:24,captionsBurned:false};
-    config.capabilityRequirements=['app-feature-demo'];
+    config.capabilityRequirements=['app-feature-demo','pointer-interaction'];
     config.scenes=[{...config.scenes[0],id:'adapter-scene',durationSec:3,featureIds:['saved-feature'],
       narration:'Real saved result.',
       claims:[{id:'real-saved-claim',featureId:'saved-feature',text:'Real saved result.',
@@ -52,23 +57,26 @@ test('real browser adapter review → trial → frozen Build → authentic captu
         evidencePolicy:{requireAssertions:true,failOnPageError:true}}}];
     writeJson(path.join(root,'project.json'),config);
     const scene=config.scenes[0],state=loadState(root);
-    scaffoldAdapter(root,config,scene,{id:'app-recipe',capabilities:['app-feature-demo']});
+    scaffoldAdapter(root,config,scene,{id:'app-recipe',capabilities:['app-feature-demo','pointer-interaction']});
     const file=adapterPath(root,'app-recipe'),manifest=readJson(file);
     manifest.actions=[
       {type:'goto',path:'/'},
       {type:'assertVisible',role:'heading',name:'Project-owned App',evidenceId:'heading'},
+      {type:'assertAttribute',testId:'canvas',attribute:'data-drawn',expectedValue:'no',evidenceId:'before-stroke'},
+      {type:'pointerPath',testId:'canvas',points:[{x:.1,y:.2},{x:.4,y:.7},{x:.8,y:.25}]},
+      {type:'assertAttribute',testId:'canvas',attribute:'data-drawn',expectedValue:'yes',evidenceId:'after-stroke'},
       {type:'clickExpectResponse',testId:'save',evidenceId:'backend-save',
         response:{pathContains:'/api/save',method:'POST',status:200,bodyIncludes:'"saved":true'}},
       {type:'assertText',testId:'result',expectedText:'Saved real data',evidenceId:'saved-text'}
     ];
-    manifest.expectedEvidenceIds=['heading','backend-save','saved-text'];
+    manifest.expectedEvidenceIds=['heading','before-stroke','after-stroke','backend-save','saved-text'];
     writeJson(file,manifest);
     const approved=approveAdapter(root,config,scene,{confirm:true});
     assert.equal(approved.status,'REVIEWED_AWAITING_TRIAL');
     await assert.rejects(trialAdapter(root,config,scene,{allowActions:false}),/--allow-actions/);
     const trial=await trialAdapter(root,config,scene,{allowActions:true});
     assert.equal(trial.status,'PASS');
-    assert.equal(trial.assertions,3);
+    assert.equal(trial.assertions,5);
     const report=readJson(path.join(root,'.avp','adapters','app-recipe','trial-report.json'));
     assert.ok(report.blockedExternalRequests>=1,'Browser must deny foreign cross-origin requests');
     assert.equal(foreignRequests,0,'Foreign origin must never receive the page subrequest');
@@ -83,7 +91,9 @@ test('real browser adapter review → trial → frozen Build → authentic captu
       'Trial receipt must reject changed evidence even if status remains PASS');
     writeJson(reportFile,unmodified);
     assert.equal(adapterStatus(root,config,scene).status,'TRIAL_PASS');
-    assert.equal(requireAdapterReady(root,config,scene).verifiedCapabilities[0],'app-feature-demo');
+    assert.deepEqual(requireAdapterReady(root,config,scene).verifiedCapabilities,['app-feature-demo','pointer-interaction']);
+    assert.ok(report.engineHash);
+    assert.ok(report.actions.some(a=>a.type==='pointerPath'));
 
     const run=(...args)=>spawnSync(process.execPath,[path.join(repo,'bin','avp.mjs'),...args,'--project',root],
       {encoding:'utf8',timeout:15000});
@@ -94,15 +104,17 @@ test('real browser adapter review → trial → frozen Build → authentic captu
     assert.ok(pre.problems.some(x=>x.code==='BUILD_REHEARSAL_MISSING'));
     const rehearsal=await rehearseScene(root,config,scene,{allowActions:true});
     assert.equal(rehearsal.status,'PASS');
-    assert.equal(rehearsal.assertions,3);
+    assert.equal(rehearsal.assertions,5);
     assert.equal(foreignRequests,0);
     const ready=freezeBuild(root,config,state);
     assert.equal(ready.status,'READY');
     requireBuildGate(root,config,state);
     const result=await capture(root,config,scene,state);
     assert.equal(result.report.status,'PASS');
-    assert.equal(result.report.assertions.length,3);
+    assert.equal(result.report.assertions.length,5);
     assert.equal(result.report.adapter.id,'app-recipe');
+    assert.ok(result.report.actions.some(a=>a.type==='pointerPath'));
+    assert.ok(result.report.assertions.some(a=>a.id==='after-stroke'&&a.pass===true));
     captions(root,config,scene,state);
     await preview(root,config,scene,state);
     const qa=qaScene(root,config,scene,state);

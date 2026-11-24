@@ -71,6 +71,8 @@
 
 ## A3. Project-specific Module / Adapter Builder — P0
 
+> **Pointer extension (PARTIAL A3-04/A3-06):** Generic bounded `pointerPath` in reviewed project adapters, paired before/after attribute assertions, interpreter-bound approval and trial; same action in rehearsal and production. No handwriting/OCR or multi-device capability is implied. See `docs/project-adapters.md`; keep checklist items open pending broader acceptance.
+
 > **F-03b first safe slice (PARTIAL — chưa tick Done):** `src/adapters.mjs` và CLI `adapters init/status/approve/trial` đã hỗ trợ manifest recipe **declarative Playwright** trong project, operator review, real-browser trial trên loopback origin, hash-bound trial receipt, Build Gate + QA stale invalidation và shared recipe giữa rehearsal/capture. Capability không chứng minh được bằng actions hiện có vẫn BLOCKED (multi-device/pointer thật/payment). **Không có OS/container sandbox**, chỉ browser-origin guard; không chạy code/script từ GitHub, không tự động xây adapter, không hỗ trợ multi-context và chưa có benchmark 2 ứng dụng lạ. Các mục A3-01/A3-06/A3-08 chỉ đạt một phần, cần nghiệm thu theo kịch bản thực tế. Xem `docs/project-adapters.md`.
 
 

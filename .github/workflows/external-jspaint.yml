@@ -1,7 +1,7 @@
 name: External JS Paint pilot
 on:
   push:
-    branches: ['test/external-jspaint-pilot']
+    branches: ['test/external-jspaint-pilot', 'test/external-quality-voice']
   pull_request:
     paths:
       - 'benchmarks/external-jspaint.mjs'

@@ -15,7 +15,7 @@ const assertionTypes=new Set(['assertVisible','assertText','assertAttribute','cl
 // e.g. multi-context pairing, handwriting gestures or payment settlement.
 const verifiedByV1=new Set(['data-assertions','timed-capture','app-feature-demo','pointer-interaction']);
 const actionKeys=new Set(['type','path','testId','role','name','label','text','value','key','timeoutMs',
-  'ms','y','evidenceId','evidenceScreenshot','expectedText','attribute','expectedValue','response','points','canvasClass','pixelColor','minPixels','maxPixels']);
+  'ms','y','evidenceId','evidenceScreenshot','expectedText','attribute','expectedValue','response','points','canvasClass','pixelColor','minPixels','maxPixels','durationMs']);
 const responseKeys=new Set(['pathContains','method','status','bodyIncludes']);
 const idValid=id=>typeof id==='string'&&/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(id);
 const adapterDir=(root,id)=>path.join(avpDir(root),'adapters',safeName(id));
@@ -55,7 +55,7 @@ function boundedActions(actions,label,{allowEmpty=false}={}){
     if(!allowedActions.has(a.type))throw Error('Adapter prohibits arbitrary scripts/commands/actions: '+String(a.type));
     if(a.type==='pointerPath'){validatePointerPath(a);continue;}
     for(const [k,v] of Object.entries(a)){
-      if(k==='points')throw Error('points are only valid for pointerPath');
+      if(k==='points'||k==='durationMs')throw Error(k+' is only valid for pointerPath');
       if(['pixelColor','minPixels','maxPixels'].includes(k)&&a.type!=='assertCanvasPixels')throw Error('Pixel bounds only valid for assertCanvasPixels');
       if(['minPixels','maxPixels'].includes(k)){if(!Number.isSafeInteger(v)||v<0||v>2000000)throw Error('Canvas pixel bound out of range');continue;}
       if(k==='key'&&a.type!=='press')throw Error('key is only valid for press');

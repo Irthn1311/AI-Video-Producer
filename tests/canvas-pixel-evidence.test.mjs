@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {validateCaptureEvidenceConfig} from '../src/capture-assertions.mjs';
 import {validatePointerPath,hasPointerTransition,executePointerPath} from '../src/pointer-actions.mjs';
 import {executeCaptureAction} from '../src/capture-actions.mjs';
+import {validateAdapterManifest} from '../src/adapters.mjs';
 const loc={canvasClass:'main-canvas'},before={type:'assertCanvasPixels',...loc,pixelColor:'#000000ff',minPixels:0,maxPixels:0,evidenceId:'before'},after={...before,minPixels:10,maxPixels:2000000,evidenceId:'after'};
 const pointer={type:'pointerPath',...loc,points:[{x:.1,y:.1},{x:.5,y:.5}]};
 test('bounded canvas pixel evidence validates disjoint before/after ranges only',()=>{
@@ -26,4 +27,10 @@ test('paced pointer path emits actual sequential mouse events, honors bounded du
   assert.ok(performance.now()-start>=220);assert.ok(moves.length>=7);assert.equal(down,1);assert.equal(up,1);assert.deepEqual(moves.at(-1),{x:49.5,y:49.5});
   let calls=0;page.mouse.move=async()=>{if(++calls>1)throw Error('simulated failure');};
   await assert.rejects(executePointerPath(page,{...pointer,durationMs:250},()=>el),/simulated failure/);assert.equal(up,2);
+});
+
+test('paced pointer field passes the reviewed adapter schema but cannot be attached to another action',()=>{
+  const config={appUrl:'http://127.0.0.1:8000'},scene={id:'s'},m={schemaVersion:1,id:'a',kind:'declarative-playwright',version:'0.1.0',provenance:{type:'project-authored',license:'project-owned',repository:null,commit:null},sceneId:'s',appOrigin:config.appUrl,permissions:{network:'same-origin-loopback',filesystem:'none',subprocess:false,secrets:false,externalApis:false},startState:'Fresh canvas',endState:'Drawn canvas',cleanup:'Dispose context',capabilities:['pointer-interaction'],actions:[before,{...pointer,durationMs:2400},after],resetActions:[],expectedEvidenceIds:['before','after']};
+  assert.doesNotThrow(()=>validateAdapterManifest(m,config,scene));
+  assert.throws(()=>validateAdapterManifest({...m,actions:[{...before,durationMs:300},pointer,after]},config,scene),/durationMs/);
 });

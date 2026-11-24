@@ -1,0 +1,71 @@
+name: MathMate upstream live ink preflight
+on:
+  push:
+    branches: ['test/mathmate-live-ink-preflight']
+  pull_request:
+    paths:
+      - 'benchmarks/mathmate-live-ink/**'
+      - '.github/workflows/mathmate-live-ink.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live-ink:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: Phat-le2005/Coach_Learning
+          ref: 6d9bb4c070d0e724704bb4bd3758e113a208b87f
+          path: mathmate-source
+          sparse-checkout: |
+            backend
+            frontend
+          persist-credentials: false
+      - name: Verify pinned revision and stage dependency manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C mathmate-source rev-parse HEAD)" = '6d9bb4c070d0e724704bb4bd3758e113a208b87f'
+          mkdir -p "$RUNNER_TEMP/mathmate-build" "$RUNNER_TEMP/mathmate-report"
+          cp benchmarks/mathmate-live-ink/Dockerfile benchmarks/mathmate-live-ink/run-live-ink.sh "$RUNNER_TEMP/mathmate-build/"
+          cp mathmate-source/backend/requirements-lock.txt mathmate-source/frontend/package.json mathmate-source/frontend/package-lock.json "$RUNNER_TEMP/mathmate-build/"
+          printf '%s\n' '{"status":"BLOCKED","stage":"dependency-install-or-container-start","scope":"UPSTREAM_LIVE_INK_E2E_NOT_AVP_PRODUCTION"}' > "$RUNNER_TEMP/mathmate-report/result.json"
+      - name: Install pinned dependency set in disposable image
+        run: docker build --tag avp-mathmate-live-ink:ci "$RUNNER_TEMP/mathmate-build"
+      - name: Start isolated PostgreSQL and execute actual two-context test
+        shell: bash
+        run: |
+          set -euo pipefail
+          db=avp-mathmate-db
+          app=avp-mathmate-app
+          cleanup() {
+            docker rm -f -v "$app" "$db" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker run -d --name "$db" --network none -e POSTGRES_DB=avp_mathmate_qa -e POSTGRES_USER=avp_qa -e POSTGRES_PASSWORD=avp_disposable_only pgvector/pgvector:pg16 >/dev/null
+          ready=0
+          for _ in $(seq 1 60); do
+            if docker exec "$db" pg_isready -h 127.0.0.1 -U avp_qa -d avp_mathmate_qa >/dev/null 2>&1; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1
+          set +e
+          timeout 14m docker run --name "$app" --network "container:$db" --cap-drop ALL --security-opt no-new-privileges --shm-size=1g --pids-limit=1024 --memory=7g --mount "type=bind,source=$GITHUB_WORKSPACE/mathmate-source,target=/target,readonly" avp-mathmate-live-ink:ci
+          status=$?
+          set -e
+          docker cp "$app:/work/public/result.json" "$RUNNER_TEMP/mathmate-report/result.json" || true
+          test "$status" = 0
+          python -c 'import json,sys; assert json.load(open(sys.argv[1]))["status"]=="UPSTREAM_BROWSER_E2E_PASS"' "$RUNNER_TEMP/mathmate-report/result.json"
+      - name: Retain only sanitized technical receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mathmate-live-ink-preflight
+          path: ${{ runner.temp }}/mathmate-report/result.json
+          if-no-files-found: ignore
+          retention-days: 7

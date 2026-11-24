@@ -82,3 +82,9 @@ test('shot spec diff distinguishes insertion, editing and shared composition',()
   b.edit.design.theme={...defaultVisualTheme,accent:'#ffffff'};
   assert.equal(shotDiff(a,b).sharedCompositionChanged,true);
 });
+
+test('framed layout preserves source geometry and forbids overlays that would cover the reserved regions',()=>{
+  const s=scene({layout:'framed',chapter:'01 · Create a task',design:{rationale:'Separate the title and caption from the actual app',framing:'stable',theme:defaultVisualTheme},shots:[{id:'source',durationSec:8,camera:'static',purpose:'Show the entire application'}]});
+  const p=compileSceneEdit(s,{sources,fps:30});assert.equal(p.layout,'framed');assert.equal(p.shots[0].zoom,1);assert.equal(p.shots[0].playbackRate,1);assert.equal(p.shots[0].trimBefore,0);
+  for(const invalid of [{callouts:[{text:'Overlay',startSec:1,durationSec:1}]},{chapter:''},{layout:'unknown'},{shots:[{...s.edit.shots[0],label:'overlay'}]},{shots:[{...s.edit.shots[0],playbackRate:2,editReason:'test'}]}])assert.throws(()=>validateSceneEdit({...s,edit:{...s.edit,...invalid}}));
+});

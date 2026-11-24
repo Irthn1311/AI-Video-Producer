@@ -1,20 +1,26 @@
 name: External TodoMVC pilot
 on:
   push:
-    branches: ['test/external-todomvc-pilot']
+    branches: ['test/external-todomvc-pilot','test/framed-story-demo']
   pull_request:
     paths:
       - 'benchmarks/external-todomvc.mjs'
       - '.github/workflows/external-todomvc.yml'
       - 'src/capture-actions.mjs'
       - 'src/capture-assertions.mjs'
+      - 'src/editing.mjs'
+      - 'remotion/src/scene-preview.tsx'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   pilot:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [baseline, story]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,8 +39,9 @@ jobs:
       - name: Install AVP-owned runtime tooling only
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg iproute2 util-linux
+          sudo apt-get install -y ffmpeg iproute2 util-linux espeak-ng fonts-noto-core
           npm install --ignore-scripts --no-audit --no-fund
+          if [ "${{ matrix.mode }}" = story ]; then npx remotion browser ensure; fi
           PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/avp-browsers" npx playwright install chromium --with-deps
       - name: Run unprivileged pilot in a fresh network namespace
         shell: bash
@@ -46,11 +53,11 @@ jobs:
           sudo unshare --net --fork bash -c '
             set -euo pipefail
             ip link set lo up
-            exec runuser -u "$1" -- env -i PATH="$2" HOME="$3" CI=1 PLAYWRIGHT_BROWSERS_PATH="$4" AVP_EXTERNAL_ISOLATED=1 "$5" "$6" "$7" "$8"
-          ' _ "$(id -un)" "$PATH" "$RUNNER_TEMP/avp-pilot-home" "$RUNNER_TEMP/avp-browsers" "$(command -v node)" "$GITHUB_WORKSPACE/benchmarks/external-todomvc.mjs" "$GITHUB_WORKSPACE/external-todomvc" "$RUNNER_TEMP/avp-pilot-result"
+            exec runuser -u "$1" -- env -i PATH="$2" HOME="$3" CI=1 PLAYWRIGHT_BROWSERS_PATH="$4" AVP_EXTERNAL_ISOLATED=1 "$5" "$6" "$7" "$8" "$9"
+          ' _ "$(id -un)" "$PATH" "$RUNNER_TEMP/avp-pilot-home" "$RUNNER_TEMP/avp-browsers" "$(command -v node)" "$GITHUB_WORKSPACE/benchmarks/external-todomvc.mjs" "$GITHUB_WORKSPACE/external-todomvc" "$RUNNER_TEMP/avp-pilot-result" "${{ matrix.mode }}"
       - name: Retain public synthetic-data pilot videos and technical report
         uses: actions/upload-artifact@v4
         with:
-          name: todomvc-avp-pilot
+          name: todomvc-avp-pilot-${{ matrix.mode }}
           path: ${{ runner.temp }}/avp-pilot-result/
           retention-days: 7

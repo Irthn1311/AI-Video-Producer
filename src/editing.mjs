@@ -101,6 +101,13 @@ export function validateSceneEdit(scene){
     }
   }
   validateDesign(scene,edit);
+  if(edit.layout!==undefined){
+    if(edit.layout!=='framed')throw Error('Unsupported edit.layout');
+    if(!edit.design||edit.design.framing!=='stable'||!edit.chapter||Array.from(edit.chapter).length>64)
+      throw Error('Framed layout requires stable designed framing and a chapter of at most 64 characters');
+    if(edit.callouts?.length||edit.insets?.length||edit.shots.some(s=>sourceName(s.source)!=='capture'||s.label||s.transitionIn||s.camera!=='static'||(s.zoom??1)!==1||(s.playbackRate??1)!==1))
+      throw Error('Framed layout reserves non-overlapping title, source and caption zones; only static unlabelled capture shots at normal speed are allowed');
+  }
   if(edit.insets!==undefined){
     if(!Array.isArray(edit.insets)||edit.insets.length>4)throw Error('edit.insets must be an array of at most 4');
     for(const [i,v] of edit.insets.entries()){
@@ -177,6 +184,6 @@ export function compileSceneEdit(scene,{sources,fps,voiceDurationSec=0,captions=
     fromFrame:Math.round(c.startSec*fps),durationFrames:frames(c.durationSec,fps),position:c.position||'top-right'}));
   return {
     fps,durationInFrames:targetFrames,hasVoice,chapter:edit.chapter||null,
-    captionsBurned,shots,insets,callouts,captions,theme:edit.design?.theme||defaultVisualTheme
+    ...(edit.layout?{layout:edit.layout}:{}),captionsBurned,shots,insets,callouts,captions,theme:edit.design?.theme||defaultVisualTheme
   };
 }

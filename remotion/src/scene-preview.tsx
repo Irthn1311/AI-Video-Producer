@@ -9,7 +9,7 @@ type MediaShot={id?:string;camera?:string;transitionInFrames?:number;file:string
 type Inset=MediaShot&{x:number;y:number;width:number;height:number};
 type Callout={text:string;fromFrame:number;durationFrames:number;position:string};
 type Caption={startMs:number;endMs:number;text:string};
-type Plan={fps:number;durationInFrames:number;hasVoice:boolean;chapter:string|null;captionsBurned:boolean;
+type Plan={layout?:'framed';fps:number;durationInFrames:number;hasVoice:boolean;chapter:string|null;captionsBurned:boolean;
   shots:MediaShot[];insets:Inset[];callouts:Callout[];captions:Caption[];theme?:Theme};
 type Props={plan:Plan};
 const empty:Plan={fps:30,durationInFrames:1,hasVoice:false,chapter:null,captionsBurned:true,shots:[],insets:[],callouts:[],captions:[]};
@@ -44,13 +44,13 @@ const Camera:React.FC<{shot:MediaShot;theme:Theme}>=({shot,theme})=>{
     </AbsoluteFill>
   </AbsoluteFill>;
 };
-const CaptionLayer:React.FC<{captions:Caption[];theme:Theme}>=({captions,theme})=>{
+const CaptionLayer:React.FC<{captions:Caption[];theme:Theme;framed?:boolean}>=({captions,theme,framed=false})=>{
   const frame=useCurrentFrame(),{fps,width,height}=useVideoConfig();
-  const fontSize=Math.max(12,Math.min(width*.035,height*.045));
+  const fontSize=Math.max(12,Math.min(width*.035,height*(framed?.032:.045)));
   const ms=frame/fps*1000;
   const row=captions.find(c=>ms>=c.startMs&&ms<c.endMs);
   if(!row)return null;
-  return <div style={{position:'absolute',left:'6%',right:'6%',bottom:'7%',display:'flex',justifyContent:'center',pointerEvents:'none'}}>
+  return <div style={{position:'absolute',left:'6%',right:'6%',bottom:framed?'0%':'7%',height:framed?'16%':undefined,alignItems:framed?'center':undefined,display:'flex',justifyContent:'center',pointerEvents:'none'}}>
     <div style={{maxWidth:'94%',padding:`${Math.max(4,fontSize*.35)}px ${Math.max(8,fontSize*.65)}px`,borderRadius:Math.max(5,fontSize*.35),background:theme.panel,
       color:theme.text,fontSize,fontWeight:600,lineHeight:1.4,textAlign:'center',whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{row.text}</div>
   </div>;
@@ -77,7 +77,21 @@ const InsetView:React.FC<{inset:Inset;theme:Theme}>=({inset,theme})=><AbsoluteFi
     background:theme.panel,color:theme.text,fontSize:17,padding:'5px 10px'}}>{inset.label}</div>:null}
   <Media shot={inset}/>
 </AbsoluteFill>;
-const EditedScene:React.FC<Props>=({plan})=>{const theme=plan.theme||defaultTheme;return <AbsoluteFill style={{background:theme.background,fontFamily:'Arial, sans-serif'}}>
+// Non-overlapping regions: the capture is fitted, not cropped, inside the central stage.
+const FramedScene:React.FC<Props>=({plan})=>{
+  const theme=plan.theme||defaultTheme,{width,height}=useVideoConfig();
+  return <AbsoluteFill style={{background:theme.background,fontFamily:'Arial, Noto Sans, sans-serif'}}>
+    <div style={{position:'absolute',left:'3%',right:'3%',top:'1%',height:'10%',display:'flex',alignItems:'center',paddingLeft:width*.015,boxSizing:'border-box',background:theme.panel,color:theme.text,fontSize:Math.max(12,height*.034),fontWeight:700,borderRadius:Math.max(4,height*.01)}}>{plan.chapter}</div>
+    <div style={{position:'absolute',left:'3%',right:'3%',top:'12%',bottom:'16%',overflow:'hidden',background:theme.background,borderRadius:Math.max(4,height*.01),border:'1px solid '+theme.accent}}>
+      {plan.shots.map((shot,i)=><Sequence key={shot.id||'shot-'+i} from={shot.fromFrame} durationInFrames={shot.durationFrames}><Camera shot={shot} theme={theme}/></Sequence>)}
+    </div>
+    {plan.hasVoice?<Audio src={staticFile('voice.wav')} volume={1}/>:null}
+    {plan.captionsBurned?<CaptionLayer captions={plan.captions} theme={theme} framed/>:null}
+  </AbsoluteFill>;
+};
+const EditedScene:React.FC<Props>=({plan})=>{const theme=plan.theme||defaultTheme;
+  if(plan.layout==='framed')return <FramedScene plan={plan}/>;
+  return <AbsoluteFill style={{background:theme.background,fontFamily:'Arial, sans-serif'}}>
   {plan.shots.map((shot,i)=><Sequence key={shot.id||'shot-'+i} from={shot.fromFrame} durationInFrames={shot.durationFrames}>
     <Camera shot={shot} theme={theme}/>
     {shot.label?<Sequence durationInFrames={Math.min(shot.durationFrames,Math.round(plan.fps*3))}><Chapter label={shot.label} theme={theme}/></Sequence>:null}

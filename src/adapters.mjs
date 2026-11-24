@@ -189,11 +189,21 @@ function currentApproval(root,config,scene,manifestHash){
     throw Error('Adapter approval stale or mismatched; review and approve the current manifest/source');
   return {data:a,hash:fileHash(f)};
 }
-function reportPass(root,config,scene,approvalHash,manifestHash){
+function reportPass(root,config,scene,approvalHash,manifestHash,manifest){
   const id=scene.capture.adapter,reportFile=reportPath(root,id),receiptFile=receiptPath(root,id);
   if(!safeFile(reportFile)||!safeFile(receiptFile))throw Error('Adapter needs a passing trial');
   const report=readJson(reportFile),receipt=readJson(receiptFile);
-  if(report.schemaVersion!==1||report.status!=='PASS'||report.sceneId!==scene.id||
+  const expected=manifest.actions.filter(x=>assertionTypes.has(x.type)).map(x=>({
+    id:x.evidenceId||x.type,type:x.type
+  }));
+  if(report.schemaVersion!==1||report.status!=='PASS'||report.scope!=='ADAPTER_BROWSER_TRIAL_NOT_PRODUCTION_EVIDENCE'||
+    report.actionsHash!==sha(manifest.actions)||!Array.isArray(report.actions)||
+    report.actions.length!==manifest.actions.length||
+    report.actions.some((x,i)=>x.type!==manifest.actions[i].type)||
+    report.assertions?.length!==expected.length||expected.some((x,i)=>
+      report.assertions[i].id!==x.id||report.assertions[i].type!==x.type)||
+    !Number.isSafeInteger(report.blockedExternalRequests)||report.blockedExternalRequests<0||
+    report.sceneId!==scene.id||
     report.adapterId!==id||report.manifestHash!==manifestHash||report.approvalHash!==approvalHash||
     report.sourceFingerprint!==sourceFingerprint(root,config)||
     report.appOrigin!==loopbackOrigin(config.appUrl)||report.resetPassed!==true||
@@ -214,7 +224,7 @@ export function adapterStatus(root,config,scene){
       return {id,status:'REVIEW_REQUIRED',reason:e.message,manifestHash:hash,
         capabilities:data.capabilities,kind:data.kind,version:data.version};
     }
-    let proof;try{proof=reportPass(root,config,scene,approval.hash,hash);}catch(e){
+    let proof;try{proof=reportPass(root,config,scene,approval.hash,hash,data);}catch(e){
       return {id,status:'TRIAL_REQUIRED',reason:e.message,manifestHash:hash,
         approvalHash:approval.hash,capabilities:data.capabilities,kind:data.kind,version:data.version};
     }

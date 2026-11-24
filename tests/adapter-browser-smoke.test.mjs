@@ -41,12 +41,13 @@ test('real browser adapter review → trial → frozen Build → authentic captu
     const config=readJson(path.join(repo,'templates','project.json'));
     config.sourcePath='app';config.workflow={requireBuild:true};
     config.appUrl='http://127.0.0.1:'+server.address().port;
-    config.voiceover.enabled=false;config.review.mode='autonomous';config.verification={mode:'legacy'};
+    config.voiceover.enabled=false;config.review.mode='autonomous';config.verification={mode:'claims'};
     config.render={engine:'ffmpeg',width:320,height:180,fps:24,captionsBurned:false};
     config.capabilityRequirements=['app-feature-demo'];
-    config.scenes=[{...config.scenes[0],id:'adapter-scene',durationSec:3,featureIds:[],
+    config.scenes=[{...config.scenes[0],id:'adapter-scene',durationSec:3,featureIds:['saved-feature'],
       narration:'Real saved result.',
-      claims:[],
+      claims:[{id:'real-saved-claim',featureId:'saved-feature',text:'Real saved result.',
+        evidenceIds:['backend-save','saved-text']}],
       capture:{adapter:'app-recipe',actions:[],
         evidencePolicy:{requireAssertions:true,failOnPageError:true}}}];
     writeJson(path.join(root,'project.json'),config);
@@ -72,6 +73,13 @@ test('real browser adapter review → trial → frozen Build → authentic captu
     assert.ok(report.blockedExternalRequests>=1,'Browser must deny foreign cross-origin requests');
     assert.equal(foreignRequests,0,'Foreign origin must never receive the page subrequest');
     assert.equal(adapterStatus(root,config,scene).status,'TRIAL_PASS');
+    const reportFile=path.join(root,'.avp','adapters','app-recipe','trial-report.json');
+    const unmodified=readJson(reportFile),corrupted=structuredClone(unmodified);
+    corrupted.assertions[0].pass=false;writeJson(reportFile,corrupted);
+    assert.equal(adapterStatus(root,config,scene).status,'TRIAL_REQUIRED',
+      'Trial receipt must reject changed evidence even if status remains PASS');
+    writeJson(reportFile,unmodified);
+    assert.equal(adapterStatus(root,config,scene).status,'TRIAL_PASS');
     assert.equal(requireAdapterReady(root,config,scene).verifiedCapabilities[0],'app-feature-demo');
 
     const run=(...args)=>spawnSync(process.execPath,[path.join(repo,'bin','avp.mjs'),...args,'--project',root],
@@ -96,6 +104,8 @@ test('real browser adapter review → trial → frozen Build → authentic captu
     await preview(root,config,scene,state);
     const qa=qaScene(root,config,scene,state);
     assert.equal(qa.pass,true,JSON.stringify(qa));
+    assert.equal(qa.checks.claimEvidence,true);
+    assert.deepEqual(qa.claimEvidence.features,['saved-feature']);
     validateSceneQa(root,config,scene,state);
     assert.equal(foreignRequests,0);
 

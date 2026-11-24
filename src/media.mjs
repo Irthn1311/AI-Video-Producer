@@ -11,17 +11,28 @@ import {sentenceParts,measureSpeech,alignNarration,validateCaptionRows} from './
 import {loadVoiceEnvironment,synthesizeVoice} from './voice-provider.mjs';
 import {timingEnabled,selectedVoice} from './voice-selection.mjs';
 import {ExecutionError,failureDetails} from './execution-errors.mjs';
+import {withAppRuntime,managedApp} from './app-runtime.mjs';
 const seconds=(value)=>Number(value||0);
 export function probe(file){return JSON.parse(run('ffprobe',['-v','error','-show_format','-show_streams','-of','json',file]));}
 export function mediaSeconds(file){return seconds(probe(file).format?.duration);}
 export {locator} from './capture-actions.mjs';
 export async function capture(root,config,scene,state,opts={}){
+  if(managedApp(config)){
+    requireUnlocked(state,scene.id);
+    if(!opts.force&&!staleParts(scene,config,sceneState(state,scene.id),root).capture)return {reused:true,file:path.join(sceneDir(root,scene.id),'capture.mp4')};
+    try{return await withAppRuntime(root,config,opts,session=>captureCore(root,config,scene,state,{...opts,appSession:session}));}
+    catch(e){const ss=sceneState(state,scene.id);if(ss.artifacts?.capture){ss.artifacts.capture.inputHash='INVALIDATED';delete ss.qa;ss.approved=false;invalidateOutput(state);saveState(root,state);}throw e;}
+  }
+  return captureCore(root,config,scene,state,opts);
+}
+async function captureCore(root,config,scene,state,opts={}){
   let adapterProof;try{adapterProof=requireAdapterReady(root,config,scene);}catch(e){throw new ExecutionError('ADAPTER_OR_POLICY_BLOCKED',e.message);}
   const effectiveActions=adapterActions(root,config,scene);
   const ss=sceneState(state,scene.id);requireUnlocked(state,scene.id);const parts=staleParts(scene,config,ss,root);if(!parts.capture&&!opts.force)return {reused:true,file:path.join(sceneDir(root,scene.id),'capture.mp4')};
   let chromium;try{({chromium}=await import('@playwright/test'));}catch{throw new ExecutionError('TOOL_UNAVAILABLE','Playwright not installed. Run npm install, then npx playwright install chromium.');}
   const dir=sceneDir(root,scene.id);fs.mkdirSync(dir,{recursive:true});const raw=path.join(dir,'raw');fs.mkdirSync(raw,{recursive:true});
   let browser;try{browser=await chromium.launch({headless:true});}catch(e){throw new ExecutionError('TOOL_UNAVAILABLE',e.message);}let ctx;const report={scene:scene.id,actions:[],assertions:[],status:'IN_PROGRESS',startedAt:new Date().toISOString(),
+    ...(opts.appSession?{appSession:opts.appSession}:{}),
     adapter:adapterProof?{id:adapterProof.id,manifestHash:adapterProof.manifestHash,receiptHash:adapterProof.receiptHash}:null};
   try{ctx=await browser.newContext({...(adapterProof?{acceptDownloads:false,serviceWorkers:'block',permissions:[]}:{}),viewport:{width:config.render?.width||1920,height:config.render?.height||1080},recordVideo:{dir:raw,size:{width:config.render?.width||1920,height:config.render?.height||1080}}});await protectAdapterBrowser(ctx,config,scene);const page=await ctx.newPage();const pageErrors=[];report.pageErrors=pageErrors;page.on('pageerror',err=>pageErrors.push(err.message.slice(0,500)));const start=Date.now();
     for(const a of effectiveActions){const startAction=Date.now();

@@ -63,6 +63,10 @@ Bundled guidance files are loaded only when an agent decides the matching domain
 
 Before any **future** external tool/skill execution, the next phase must implement: publisher identity and source-code review, exact commit pinning, explicit permissions, license review, supported OS/agent verification, privacy scope, sandboxed trial and measured benefit, with audit logs. The present slice intentionally **does not bypass this missing security gate**.
 
+## Project-local adapter handoff
+
+A missing pointer-interaction implementation can now be satisfied by a project-authored, reviewed declarative adapter after a real rehearsal. No external GitHub research result gains executable permissions. See [Project Adapters](project-adapters.md).
+
 ## 5. Unfinished Master Checklist criteria
 
 `A2-01`, `A2-02`, `A2-03`, `A2-06`, `A2-09` have partial implementations. `A2-04` has only a metadata prioritization heuristic, not a security or compatibility score. `A2-05`, `A2-07`, and `A2-08` (independent vetting, runtime skill invocation, evidence-backed trials) are **not complete**.

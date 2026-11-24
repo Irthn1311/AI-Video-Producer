@@ -55,6 +55,10 @@ flowchart LR
 
 The first module is **`software-demo`**. The architecture leaves room for future explainer and marketing-video modules. AVP v0.1 is an extensible toolkit, **not a hosted or fully autonomous video service**.
 
+## Reviewed project-local capture adapters (F-03b — PARTIAL)
+
+Project-specific declarative JSON recipes support bounded pointer paths, reviewed permissions, current rehearsal and shared production capture. Approval is content/source/engine-bound. No arbitrary script or third-party execution. [Adapter guide](docs/project-adapters.md).
+
 ## Domain-specific skills and toolchain research (F-03 — PARTIAL)
 
 `avp skills recommend` maps an app's source-derived needs to existing AVP implementations and local guidance; optional `avp skills search --online` performs bounded, read-only GitHub repository research for unmet needs. Guidance and search results are **not executable capabilities**, and explicitly required unsupported skills block Build. [Skill Discovery](docs/skill-discovery.md).

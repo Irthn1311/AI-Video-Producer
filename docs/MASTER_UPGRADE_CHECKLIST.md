@@ -71,6 +71,8 @@
 
 ## A3. Project-specific Module / Adapter Builder — P0
 
+> **F-03b first slice (PARTIAL):** `src/adapters.mjs` supports reviewed project-local JSON recipes, exact scene action matching, permission declarations, source/engine-bound approval, generic normalized pointer paths, shared real rehearsal/capture, and Build blockers on drift. A3-01/02/04/06/07/08 remain partial; A3-03 arbitrary-code OS sandbox and A3-05 domain backend/events remain open. No third-party code execution or automatic adapter authoring. See `docs/project-adapters.md`. Real fixture test does not establish MathMate parity.
+
 - [ ] `A3-01` Định nghĩa interface/plugin contract cho adapter riêng của project: inputs, outputs, start state, end state, capture markers, assertions, reset/cleanup, error types, timeout, dependencies.
 - [ ] `A3-02` Agent tự tạo/cấu hình adapter khi built-in không đủ, lưu ở **project workspace** thay vì hardcode vào core AVP.
 - [ ] `A3-03` Cho phép Scripted Capture trong sandbox với quyền giới hạn, ngoài declarative actions; giới hạn filesystem/network/secrets và xác nhận trước khi chạy mã sinh ra.

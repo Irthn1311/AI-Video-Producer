@@ -74,6 +74,10 @@ Existing `project.json` remains the **canonical source for authoring** at this s
 
 Build checks current source/config hashes, storyboard/coverage approvals, the complete set of non-recording browser rehearsal results, bundled-tool availability and selected adapter restrictions. It detects plan mutation and invalidated rehearsal. If any required input changes, freeze becomes stale and Production is blocked until renewed inspection, rehearsal and approval.
 
+## Reviewed project-local recipes
+
+For a scene that needs a special pointer interaction, a reviewed declarative adapter can be approved with `avp adapter approve --scene ID --confirm`. Then prepare Build again, run real rehearsal and freeze. The recipe and approval are bound to source/engine/scene hashes. See [Project Adapters](project-adapters.md).
+
 ## Limits that remain on the MASTER checklist
 
 - `analyze` adds bounded stack/routes/capability signals; `skills recommend` adds local matching and `skills search --online` can search **external repository metadata only**. These are not autonomous full repo comprehension, publisher/trust review or third-party skill installation. See [Skill Discovery](skill-discovery.md). See [Project Intelligence](project-intelligence.md).

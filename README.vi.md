@@ -39,6 +39,10 @@ Ghép và xuất MP4
 | **Rendering** | FFmpeg; tùy chọn backend Remotion |
 | **QA** | Kiểm tra kỹ thuật và lưu bằng chứng theo cảnh |
 
+## Adapter riêng theo dự án (F-03b — PARTIAL)
+
+Recipe JSON khai báo thao tác pointer, quyền và assertion. Agent/người dùng duyệt đúng phiên bản, chạy thử Build rồi mới quay. Không chạy mã tùy ý hoặc tự cài skill ngoài. [Hướng dẫn](docs/project-adapters.md).
+
 ## Tìm skill/tool theo đặc thù dự án (F-03 — PARTIAL)
 
 `avp skills recommend` đối chiếu nhu cầu rút từ source với implementation và skill hướng dẫn sẵn có trong AVP. `avp skills search --online` chỉ khi được cho phép sẽ tra cứu metadata repository trên GitHub theo năng lực còn thiếu. **Tìm thấy repo không có nghĩa đã kiểm chứng/cài/chạy được skill.** Các năng lực bắt buộc nhưng chưa có implementation sẽ chặn Build. [Hướng dẫn](docs/skill-discovery.md).

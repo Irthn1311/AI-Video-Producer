@@ -71,6 +71,8 @@
 
 ## A3. Project-specific Module / Adapter Builder — P0
 
+> **Pointer extension (PARTIAL A3-04/A3-06):** Generic bounded `pointerPath` in reviewed project adapters, paired before/after attribute assertions, interpreter-bound approval and trial; same action in rehearsal and production. No handwriting/OCR or multi-device capability is implied. See `docs/project-adapters.md`; keep checklist items open pending broader acceptance.
+
 > **F-03b first safe slice (PARTIAL — chưa tick Done):** `src/adapters.mjs` và CLI `adapters init/status/approve/trial` đã hỗ trợ manifest recipe **declarative Playwright** trong project, operator review, real-browser trial trên loopback origin, hash-bound trial receipt, Build Gate + QA stale invalidation và shared recipe giữa rehearsal/capture. Capability không chứng minh được bằng actions hiện có vẫn BLOCKED (multi-device/pointer thật/payment). **Không có OS/container sandbox**, chỉ browser-origin guard; không chạy code/script từ GitHub, không tự động xây adapter, không hỗ trợ multi-context và chưa có benchmark 2 ứng dụng lạ. Các mục A3-01/A3-06/A3-08 chỉ đạt một phần, cần nghiệm thu theo kịch bản thực tế. Xem `docs/project-adapters.md`.
 
 
@@ -88,6 +90,8 @@
 
 ## A4. Creative Brief & Adaptive Interaction — P0
 
+> **F-04 first slice (PARTIAL; pending CI):** opt-in `creative.director` contract, context-specific advisory recommendations, scene-level editorial directions, independent creative/production review modes, exact-hash interactive approval and Build Gate blockers for missing intent, duration overflow or missing review. No automatic storyboard generation, voice audition execution, shot application, targeted invalidation or semantic quality proof yet. See `docs/creative-director.md`. Keep all A4 criteria unchecked until their full acceptance tests pass.
+
 - [ ] `A4-01` Xây `creative-brief.json`: mục đích, đối tượng, phong cách, ngôn ngữ, format, aspect ratio, target duration, độ chi tiết, tone, thương hiệu.
 - [ ] `A4-02` Đặt sớm các ràng buộc ảnh hưởng **kịch bản** (thời lượng, 9:16/16:9, ngôn ngữ, định hướng voice, mục tiêu trình bày); không chờ render mới quyết định.
 - [ ] `A4-03` AI tự đề xuất số scene, thứ tự tính năng, hook, kết luận, voice preset, nhịp dựng, cách zoom/focus, transition; giải thích sự phù hợp với app.
@@ -100,6 +104,14 @@
 **Done khi:** Agent chủ động đề xuất một video hợp đặc điểm app, hỏi đúng quyết định cần hỏi ở Interactive, và có thể chọn các quyết định tương tự trong Autonomous mà vẫn tuân thủ policy.
 
 ## A5. Storyboard, Scene/Shot Design & Rehearsal — P0
+
+> **F-04e integration candidate:** combines reviewed pointer adapter and F-04a–d histories. CI includes two distinct local browser fixtures through source analysis, agent-authored storyboard, voice selection/timing, visual composition, Build freeze and real production capture/render/QA; scoped edit-repair and cache assertions. Fixture-authored proposals and synthetic audio are test inputs, not proof of autonomous creative generation, voice quality or unknown-app benchmarking. No A4/A5 item is promoted to DONE on this basis. See `docs/integrated-build-validation.md`.
+
+> **F-04d first slice (PARTIAL; CI pending):** opt-in `creative.visual` requires explicit `edit.design` and stable shot IDs, validates scene duration/frame budget, stable/static framing, documented trims and speed changes, bounded in-shot fade and consistent accessible panel/text palette. Remotion renders camera modes and theme; storyboard check exposes shot spec diff. Scene previews still render as a unit; no cross-scene transitions, measured semantic evidence visibility, automatic creative generation or independent shot render/cache yet. See `docs/visual-direction.md`.
+
+> **F-04c first slice (PARTIAL; CI pending):** opt-in `creative.timing` measures full-scene audition duration and amplitude silence via FFprobe/FFmpeg, maintains content-addressed voice variants and explicit selection, shares Gemini budget reservation, compares actual browser rehearsal action durations against scene slots, binds selection to Build lock, and reuses exact selected audio in Production. No live paid TTS test, automatic language/accent or speech correctness scoring, word-level alignment, semantic audio/action synchronization, or automatic timing edits. See `docs/voice-timing.md`.
+
+> **F-04b first slice (PARTIAL; CI pending):** agent-authored storyboard can replace/add/reorder canonical scenes via bounded source context, source-file hash references, strict claim/recipe validation, explicit hash-confirmed apply and per-scene diff. Editorial roles/state/fallback metadata are recorded and bound to Build; locked scenes are protected. Cross-scene dependencies are recorded but block Build until orchestration exists. This is not automatic LLM story generation or proof of semantic truth, shot-level timing, runtime reset or unknown-app generalization. See `docs/agent-storyboard.md`. Keep A5 unchecked pending full acceptance.
 
 - [ ] `A5-01` Sinh storyboard theo features **đã khảo sát**, không hallucinate; claim → evidence conditions → scene IDs → shot IDs.
 - [ ] `A5-02` Định nghĩa scene/shot ID ổn định, thời lượng mục tiêu, narrator text, UI route, actions, reset state, assertions, capture markers và assets.

@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {readJson,writeJson} from '../src/utils.mjs';
-import {loadState} from '../src/state.mjs';
+import {loadState,inputHashes} from '../src/state.mjs';
+import {defaultVisualTheme} from '../src/editing.mjs';
 import {prepareBuild,checkBuild,requiresBuild,requireBuildGate,requiredTools} from '../src/build.mjs';
 
 const repo=path.resolve(import.meta.dirname,'..');
@@ -131,5 +132,55 @@ test('legacy project with no opted-in Build retains previous CLI workflow gates'
     const s=readJson(path.join(f.root,'project.json'));delete s.workflow;writeJson(path.join(f.root,'project.json'),s);
     const status=JSON.parse(cli(f.root,'status').stdout);
     assert.equal(status.build.status,'LEGACY_NOT_ENFORCED');
+  }finally{cleanup(f);}
+});
+
+test('opt-in interactive creative approval is hash-bound and cannot bypass missing rehearsals',()=>{
+  const f=setup();
+  try{
+    f.config.creative={audience:'technical reviewers',goal:'show verified workflow',director:{mode:'interactive',visualStyle:'minimal',sceneDirections:{[f.config.scenes[0].id]:{framing:'no zoom'}}}};
+    writeJson(path.join(f.root,'project.json'),f.config);
+    assert.equal(cli(f.root,'build','prepare').status,0);
+    let r=checkBuild(f.root,f.config,f.state);
+    assert.ok(r.reviewRequired.some(x=>x.code==='BUILD_CREATIVE_REVIEW_PENDING'));
+    const c=JSON.parse(cli(f.root,'creative','recommend').stdout);
+    assert.equal(c.status,'REVIEW_REQUIRED');
+    assert.equal(cli(f.root,'creative','approve','--hash','bad','--confirm').status,1);
+    const approval=cli(f.root,'creative','approve','--hash',c.briefHash,'--confirm');
+    assert.equal(approval.status,0,approval.stderr);
+    r=checkBuild(f.root,f.config,f.state);
+    assert.equal(r.creative.status,'APPROVED');
+    assert.equal(r.status,'BLOCKED');
+    assert.ok(r.problems.some(x=>x.code==='BUILD_REHEARSAL_MISSING'));
+    f.config.creative.director.visualStyle='editorial';
+    writeJson(path.join(f.root,'project.json'),f.config);
+    assert.equal(cli(f.root,'build','prepare','--force').status,0);
+    assert.ok(checkBuild(f.root,f.config,f.state).reviewRequired.some(x=>x.code==='BUILD_CREATIVE_REVIEW_PENDING'));
+  }finally{cleanup(f);}
+});
+
+test('opt-in visual policy is gated and edit-only changes preserve capture and voice inputs',()=>{
+  const f=setup();
+  try{
+    f.config.creative={visual:{consistentTheme:true}};
+    writeJson(path.join(f.root,'project.json'),f.config);
+    assert.equal(cli(f.root,'build','prepare').status,0);
+    assert.ok(checkBuild(f.root,f.config,f.state).problems.some(x=>x.code==='VISUAL_DESIGN_INVALID'));
+    for(const s of f.config.scenes)s.edit={design:{rationale:'Retain full application context',framing:'stable',theme:structuredClone(defaultVisualTheme)},
+      shots:[{id:'whole',durationSec:s.durationSec,camera:'static',purpose:'Show actual application'}]};
+    const s=f.config.scenes[0],before=inputHashes(s,f.config,{},f.root);
+    s.edit.design.theme.accent='#123456';
+    for(const other of f.config.scenes.slice(1))other.edit.design.theme.accent='#123456';
+    const after=inputHashes(s,f.config,{},f.root);
+    assert.equal(before.capture,after.capture);assert.equal(before.voice,after.voice);
+    assert.notEqual(before.preview,after.preview);
+    writeJson(path.join(f.root,'project.json'),f.config);
+    assert.equal(cli(f.root,'build','prepare','--force').status,0);
+    const plan=readJson(path.join(f.root,'.avp','build','production-plan.json'));
+    assert.deepEqual(plan.scenes[0].shotIds,['whole']);
+    const report=checkBuild(f.root,f.config,f.state);
+    assert.equal(report.visual.status,'PASS');
+    assert.equal(report.status,'BLOCKED');
+    assert.ok(report.problems.some(x=>x.code==='BUILD_REHEARSAL_MISSING'));
   }finally{cleanup(f);}
 });

@@ -82,7 +82,23 @@ Sample key fields:
 }
 ```
 
-The manifest contains **only existing AVP declarative capture actions**. It must contain at least one actual assertion. It rejects unknown action commands, arbitrary eval/script/exec, external origins, filesystem/secrets/subprocess permissions and externally sourced executable recipes. For other domain capabilities (handwriting/pointer gestures, multi-device synchronization, WebGL internals, payment settlement), a passing ordinary UI trial **does not prove those features**. Such requirements remain blocked until AVP has a suitable specialized adapter runtime and evidence model.
+The manifest contains **only AVP declarative capture actions**. It must contain at least one actual assertion. It rejects unknown action commands, arbitrary eval/script/exec, external origins, filesystem/secrets/subprocess permissions and externally sourced executable recipes. For other domain capabilities (handwriting recognition, multi-device synchronization, WebGL internals, payment settlement), a passing ordinary UI trial **does not prove those features**. Such requirements remain blocked until AVP has a suitable specialized adapter runtime and evidence model.
+
+### Bounded pointer interaction
+
+A project-authored adapter may declare `pointer-interaction` with the generic `pointerPath` action. The action moves a real browser mouse along 2–80 normalized coordinates within a deterministic visible locator, pressing and releasing the mouse. It is available only in reviewed adapter execution, not ordinary capture.
+
+```json
+[
+  {"type":"assertAttribute","testId":"canvas","attribute":"data-drawn","expectedValue":"no","evidenceId":"before-stroke"},
+  {"type":"pointerPath","testId":"canvas","points":[{"x":0.1,"y":0.2},{"x":0.4,"y":0.7},{"x":0.8,"y":0.25}]},
+  {"type":"assertAttribute","testId":"canvas","attribute":"data-drawn","expectedValue":"yes","evidenceId":"after-stroke"}
+]
+```
+
+The ordered evidence list must include both assertions. A successful trial requires an observable attribute transition on the same target; merely declaring the capability or doing an unrelated DOM click is insufficient. This does not certify handwriting recognition or any higher-level business semantics. Mouse paths do not yet support touchscreen or multiple devices.
+
+The adapter engine itself is hashed into approval and trial receipts. Upgrading the interpreter invalidates previous adapter approvals, trials and capture fingerprints; explicitly review and re-trial before production. Ordinary non-adapter captures retain their previous fingerprints.
 
 **Local-only review/trial records:** `.avp/adapters/<id>/review.json`, `trial-report.json`, `trial-receipt.json`. The review binds the manifest and current project source hash. The trial executes the manifest against a fresh Chromium context, blocks browser requests outside the configured same-origin loopback application, records assertion outcomes and page errors, attempts declared reset actions and writes a content-hash-bound receipt **only on success**.
 
@@ -95,7 +111,7 @@ The Build Package stores adapter selection, manifest/approval/trial receipt and 
 - `approve --confirm` records an operator decision locally; it does not authenticate a reviewer identity or prove licensing/security compliance. File hashes detect accidental edits and mismatches; they are **not cryptographic attestations against an attacker who can rewrite the whole local workspace**.
 - Browser same-origin restrictions apply to adapter-based trial, Build rehearsal and production capture; they do not guarantee that a server cannot call the Internet.
 - A successful trial means the **declared assertions** passed in the trial. It is not an independent semantic audit of the app, nor evidence that future production footage is correct. Production still generates separate capture evidence and QA.
-- Domain capability declarations outside the small provable v1 set remain **unproven even after trial**. In particular, a simple DOM click must not satisfy `multi-context-browser` or `pointer-interaction`.
+- Domain capability declarations outside the small provable v1 set remain **unproven even after trial**. In particular, a simple DOM click must not satisfy `multi-context-browser` or `pointer-interaction`; pointer capability needs the real path and paired state assertions.
 - The first implementation has a structured `cleanup` declaration and optional `resetActions`; backend fixture reversion cannot be guaranteed without a project-specific test dataset/reset endpoint.
 
 See [Master Checklist](MASTER_UPGRADE_CHECKLIST.md): A3-01, A3-06 and A2-05/A2-08 are **PARTIAL**. Still missing: isolation of arbitrary scripts in a container, vetted external skill provenance/commit/license/permissions, automatic adapter authoring, multi-browser/device support, domain-specific API/DB assertions, and benchmark on unfamiliar real applications.

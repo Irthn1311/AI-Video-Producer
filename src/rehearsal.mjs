@@ -33,13 +33,13 @@ export async function rehearseScene(root,config,scene,{allowActions=false}={}){
   let browser,context;
   try{
     browser=await chromium.launch({headless:true});
-    context=await browser.newContext({viewport:{width:config.render?.width||1920,height:config.render?.height||1080}});
+    context=await browser.newContext({...(adapterProof?{acceptDownloads:false,serviceWorkers:'block',permissions:[]}:{}),viewport:{width:config.render?.width||1920,height:config.render?.height||1080}});
     await protectAdapterBrowser(context,config,scene);
     const page=await context.newPage();
     page.on('pageerror',err=>record.pageErrors.push(err.message.slice(0,500)));
     for(const action of effectiveActions){
       const start=Date.now();
-      await executeCaptureAction(page,action,{appUrl:config.appUrl,dir:null,report:record});
+      await executeCaptureAction(page,action,{appUrl:config.appUrl,dir:null,report:record,adapter:Boolean(adapterProof)});
       record.actions.push({type:action.type,ms:Date.now()-start});
     }
     if(scene.capture.evidencePolicy?.requireAssertions&&!record.assertions.length)

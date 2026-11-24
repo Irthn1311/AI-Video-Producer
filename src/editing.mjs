@@ -8,6 +8,51 @@ const assetName=(v)=>{if(typeof v!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$
 const sourceName=(v)=>{if(v==='capture'||v===undefined)return 'capture';if(typeof v==='string'&&v.startsWith('asset:'))return 'asset:'+assetName(v.slice(6));throw Error('Shot source must be capture or asset:NAME');};
 const placements=new Set(['top-left','top-right','bottom-left','bottom-right','center']);
 const optional=(v,min,max,label)=>{if(v!==undefined)finite(v,min,max,label);};
+const record=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const fields=(v,allowed,label)=>{if(!record(v)||Object.keys(v).some(k=>!allowed.includes(k)))throw Error('Unexpected '+label+' field');};
+const cameraModes=new Set(['static','pulse','push','hold']);
+const color=v=>typeof v==='string'&&/^#[0-9a-fA-F]{6}$/.test(v);
+export const defaultVisualTheme={background:'#f5faf7',panel:'#073e32',text:'#ffffff',accent:'#bde7d5'};
+function luminance(hex){
+  const v=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4);
+  return .2126*v[0]+.7152*v[1]+.0722*v[2];
+}
+function validateTheme(theme){
+  fields(theme,['background','panel','text','accent'],'visual theme');
+  if(!Object.keys(defaultVisualTheme).every(k=>color(theme[k])))throw Error('Theme requires four #RRGGBB colors');
+  const a=luminance(theme.panel),b=luminance(theme.text);
+  if((Math.max(a,b)+.05)/(Math.min(a,b)+.05)<4.5)throw Error('Visual panel/text contrast must be at least 4.5:1');
+}
+export function shotIds(scene){
+  const defs=scene.edit?.shots||[{source:'capture'}];
+  return defs.map((s,i)=>scene.edit?.design?s.id:scene.id+'-shot-'+String(i+1).padStart(2,'0'));
+}
+function validateDesign(scene,edit){
+  const d=edit.design;
+  if(d===undefined)return;
+  fields(d,['rationale','framing','theme'],'edit.design');
+  text(d.rationale,1000,'edit.design.rationale');
+  if(!['stable','adaptive'].includes(d.framing))throw Error('Invalid edit.design.framing');
+  validateTheme(d.theme);
+  if(!Array.isArray(edit.shots)||!edit.shots.length)throw Error('Designed scene requires explicit shots');
+  if(!edit.shots.some(s=>sourceName(s.source)==='capture'))throw Error('Designed scene requires a capture shot');
+  const seen=new Set();let total=0;
+  for(const s of edit.shots){
+    if(typeof s.id!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(s.id)||seen.has(s.id))throw Error('Designed shots require unique stable IDs');
+    seen.add(s.id);total+=s.durationSec;
+    text(s.purpose,500,'shot.purpose');
+    if(!cameraModes.has(s.camera))throw Error('Designed shots require camera mode');
+    if((d.framing==='stable'||s.camera==='static')&&(s.zoom??1)!==1)throw Error('Stable/static framing requires zoom 1');
+    if(d.framing==='stable'&&s.camera!=='static')throw Error('Stable framing requires static camera');
+    if((s.trimStartSec??0)>0||s.trimEndSec!==undefined||(s.playbackRate??1)!==1)text(s.editReason,500,'shot.editReason');
+    if(s.transitionIn!==undefined){
+      fields(s.transitionIn,['type','durationSec'],'shot transition');
+      if(s.transitionIn.type!=='fade')throw Error('Only in-shot fade is supported');
+      finite(s.transitionIn.durationSec,.05,Math.min(1,s.durationSec/3),'transition duration');
+    }
+  }
+  if(Math.abs(total-scene.durationSec)>.001)throw Error('Designed shots must fill scene duration exactly');
+}
 
 export function editAssetNames(edit){
   if(!edit)return [];
@@ -55,6 +100,7 @@ export function validateSceneEdit(scene){
       if(c.position!==undefined&&!placements.has(c.position))throw Error(k+'.position is unsupported');
     }
   }
+  validateDesign(scene,edit);
   if(edit.insets!==undefined){
     if(!Array.isArray(edit.insets)||edit.insets.length>4)throw Error('edit.insets must be an array of at most 4');
     for(const [i,v] of edit.insets.entries()){
@@ -105,14 +151,19 @@ export function compileSceneEdit(scene,{sources,fps,voiceDurationSec=0,captions=
   const defs=edit.shots||[{source:'capture',durationSec:scene.durationSec}];
   const slotFrames=defs.map(s=>frames(s.durationSec,fps));
   const used=slotFrames.reduce((a,b)=>a+b,0);
-  if(used>targetFrames+1)throw Error('Scene shots exceed output frame count');
+  if(used>targetFrames+(edit.design?0:1))throw Error('Scene shots exceed output frame count');
   const shots=[];let cursor=0;
+  const ids=shotIds(scene);
   for(let i=0;i<defs.length;i++){
     const s=defs[i],key=sourceName(s.source),source=sources[key];
     if(!source)throw Error('Missing source for scene edit: '+key);
     const tail=i===defs.length-1?Math.max(0,targetFrames-used):0;
+    if(edit.design&&s.trimEndSec!==undefined&&s.trimEndSec>source.durationSec+1/fps)throw Error('Designed shot trim exceeds actual source: '+ids[i]);
     const media=compileMedia(s,source,slotFrames[i],fps,tail);
-    shots.push({...media,fromFrame:cursor,zoom:s.zoom??1,focus:s.focus??{x:0.5,y:0.5},label:s.label||null});
+    if(edit.design&&s.transitionIn&&frames(s.transitionIn.durationSec,fps)>=slotFrames[i])throw Error('Fade would obscure entire shot: '+ids[i]);
+    shots.push({...media,id:ids[i],fromFrame:cursor,zoom:s.zoom??1,focus:s.focus??{x:0.5,y:0.5},label:s.label||null,
+      camera:s.camera||'pulse',transitionInFrames:s.transitionIn?frames(s.transitionIn.durationSec,fps):0,
+      purpose:s.purpose||null,editReason:s.editReason||null});
     cursor+=media.durationFrames;
   }
   const insets=(edit.insets||[]).map(v=>{
@@ -126,6 +177,6 @@ export function compileSceneEdit(scene,{sources,fps,voiceDurationSec=0,captions=
     fromFrame:Math.round(c.startSec*fps),durationFrames:frames(c.durationSec,fps),position:c.position||'top-right'}));
   return {
     fps,durationInFrames:targetFrames,hasVoice,chapter:edit.chapter||null,
-    captionsBurned,shots,insets,callouts,captions
+    captionsBurned,shots,insets,callouts,captions,theme:edit.design?.theme||defaultVisualTheme
   };
 }

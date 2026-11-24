@@ -8,6 +8,12 @@ import {projectAdapterSnapshot,adapterStatus,adapterActions} from './adapters.mj
 import {gate,inputHashes} from './state.mjs';
 import {requireCoveragePlan,verificationMode} from './evidence.mjs';
 import {rehearsalPath} from './rehearsal.mjs';
+import {makeCreativeBrief,creativeStatus} from './creative-director.mjs';
+import {storyboardGate} from './agent-storyboard.mjs';
+import {evaluateTiming} from './voice-timing.mjs';
+import {timingEnabled} from './voice-selection.mjs';
+import {shotIds} from './editing.mjs';
+import {visualStatus} from './visual-direction.mjs';
 
 const SCHEMA=1;
 const files=['project-profile','feature-inventory','capability-profile','toolchain-lock',
@@ -30,7 +36,7 @@ function localModules(){
 export function requiredTools(config){
   const tools=['ffmpeg','ffprobe','playwright'];
   if(config.render?.engine==='remotion'||config.scenes.some(s=>Boolean(s.edit)))tools.push('remotion');
-  if(config.voiceover?.enabled!==false)tools.push('gemini-tts');
+  if(config.voiceover?.enabled!==false&&!timingEnabled(config))tools.push('gemini-tts');
   return tools;
 }
 export function toolchainSnapshot(config,root){
@@ -103,7 +109,7 @@ function makeArtifacts(root,config){
   const toolchain={...toolchainSnapshot(config,root),...source,
     domainCapabilityLock:{registryHash:matching.registryHash,requirements:matching.requirements,
       projectAdapters:adapters,externalInstalls:[],externalSkillsExecuted:false}};
-  const brief={schemaVersion:SCHEMA,...source,title:config.title,
+  const brief=makeCreativeBrief(root,config,{analysis,sourceHash})||{schemaVersion:SCHEMA,...source,title:config.title,
     audience:config.creative?.audience??null,
     goal:config.creative?.goal??'Demonstrate observed application functionality',
     creativeStatus:'PROPOSED_REQUIRES_FREEZE_DECISION',
@@ -115,7 +121,8 @@ function makeArtifacts(root,config){
   const board=readJson(storyboard);
   const boardSnapshot={schemaVersion:SCHEMA,...source,
     sourceFile:'.avp/planning/storyboard.json',sourceHash:fileHash(storyboard),
-    scenes:board.scenes};
+    scenes:board.scenes,
+    ...(config.creative?.storyboard?{agentStoryboard:config.creative.storyboard}:{})};
   const artifacts={
     'project-profile':profile,'feature-inventory':featureInventory,
     'capability-profile':capabilityProfile,'toolchain-lock':toolchain,
@@ -135,9 +142,10 @@ function makeArtifacts(root,config){
     render:config.render,language:config.language,review:config.review,
     maxEstimatedUsd:config.budget?.maxEstimatedUsd??null,
     dependencies:config.production?.sceneDependencies||{},
+    ...(config.creative?.storyboard?{agentStoryboardHash:sha(config.creative.storyboard)}:{}),
     scenes:config.scenes.map(s=>({
       id:s.id,title:s.title,durationSec:s.durationSec,featureIds:s.featureIds||[],
-      shotIds:(s.edit?.shots?.length?s.edit.shots:[{source:'capture'}]).map((_,i)=>s.id+'-shot-'+String(i+1).padStart(2,'0')),
+      shotIds:shotIds(s),
       captureInputHash:inputHashes(s,config,{},root).capture,
       captureRecipe:s.capture.adapter?{...s.capture,
         adapterBinding:adapters.find(x=>x.sceneId===s.id),
@@ -325,7 +333,7 @@ function checkPlanning(root,config,state){
 function artifactDigests(root){
   return Object.fromEntries(files.map(name=>[name,fileHash(file(root,name))]));
 }
-function validateLock(root,config,proofHashes){
+function validateLock(root,config,proofHashes,timingDigest){
   const lockFile=file(root,'build-lock');
   if(!exists(lockFile))return false;
   const lock=readJson(lockFile);
@@ -333,6 +341,7 @@ function validateLock(root,config,proofHashes){
      lock.sourceFingerprint!==sourceFingerprint(root,config))return false;
   if(files.some(name=>lock.artifactDigests?.[name]!==fileHash(file(root,name))))return false;
   if(sha(lock.rehearsalDigests)!==sha(proofHashes))return false;
+  if(timingEnabled(config)&&lock.timingDigest!==timingDigest)return false;
   return true;
 }
 /** Readiness NEVER assumes a completed rehearsal is evidence for production footage. */
@@ -340,9 +349,14 @@ export function checkBuild(root,config,state,{forFreeze=false}={}){
   const a=checkArtifacts(root,config);
   const rehearsal=verifyRehearsals(root,config);
   const planning=checkPlanning(root,config,state);
-  const problems=[...a.problems,...rehearsal.problems,...planning.problems];
-  const reviews=planning.review;
-  const lockValid=!problems.length&&!reviews.length&&validateLock(root,config,rehearsal.proofHashes);
+  const timing=evaluateTiming(root,config);
+  const visual=visualStatus(config);
+  const problems=[...a.problems,...rehearsal.problems,...planning.problems,...storyboardGate(config,a.sourceHash),...timing.problems,...visual.problems];
+  const reviews=[...planning.review];
+  const creative=creativeStatus(root,config,{sourceHash:a.sourceHash});
+  if(creative.status==='BLOCKED')problems.push(...creative.issues);
+  if(creative.status==='REVIEW_REQUIRED')reviews.push(issue('BUILD_CREATIVE_REVIEW_PENDING','Current creative brief needs explicit review','Run avp creative recommend, then creative approve --hash HASH --confirm'));
+  const lockValid=!problems.length&&!reviews.length&&validateLock(root,config,rehearsal.proofHashes,timing.digest);
   if(!forFreeze&&!problems.length&&!reviews.length&&!lockValid)
     reviews.push(issue('BUILD_FREEZE_REQUIRED','Build is technically prepared but not frozen','Run avp build freeze after reviewing the production plan'));
   const status=problems.length?'BLOCKED':reviews.length?'REVIEW_REQUIRED':'READY';
@@ -350,6 +364,8 @@ export function checkBuild(root,config,state,{forFreeze=false}={}){
     schemaVersion:SCHEMA,status,ready:status==='READY',checkedAt:timestamp(),
     projectConfigHash:a.configHash,sourceFingerprint:a.sourceHash,
     problems,reviewRequired:reviews,warnings:a.warnings,
+    creative:{status:creative.status,briefHash:creative.briefHash||null},
+    timing,visual,
     stages:{
       intake:a.problems.some(x=>x.code.startsWith('BUILD_SOURCE')||x.code.startsWith('BUILD_CONFIG'))?'BLOCKED':'PASS',
       capabilityMatching:a.problems.some(x=>x.code.includes('TOOL')||x.code.includes('ACTION')||x.code.includes('ADAPTER'))?'BLOCKED':'PASS',
@@ -370,9 +386,10 @@ export function freezeBuild(root,config,state){
     schemaVersion:SCHEMA,frozenAt:timestamp(),configHash:sha(config),
     sourceFingerprint:sourceFingerprint(root,config),
     artifactDigests:artifactDigests(root),rehearsalDigests:proofHashes,
+    ...(timingEnabled(config)?{timingDigest:report.timing.digest}:{}),
     scope:'APP_TO_VIDEO_ONLY',trust:'LOCAL_HASHES_NOT_CRYPTOGRAPHIC_REMOTE_ATTESTATION',
     planHash:fileHash(file(root,'production-plan')),
-    creativeApproval:'EXPLICIT_BUILD_FREEZE',
+    creativeApproval:config.creative?.director?creativeStatus(root,config).status:'EXPLICIT_BUILD_FREEZE',
     note:'Approved Build input is not runtime proof of produced scenes'
   };
   writeJson(file(root,'build-lock'),lock);
@@ -382,7 +399,7 @@ export function freezeBuild(root,config,state){
     sceneCount:config.scenes.length,buildLock:file(root,'build-lock')};
 }
 export function requiresBuild(root,config){
-  return config.workflow?.requireBuild===true||exists(file(root,'build-state'));
+  return config.creative?.visual!==undefined||timingEnabled(config)||config.creative?.storyboard!==undefined||config.creative?.director!==undefined||config.workflow?.requireBuild===true||exists(file(root,'build-state'));
 }
 /** Legacy projects remain compatible until they opt into Build or are initialized with it. */
 export function requireBuildGate(root,config,state){

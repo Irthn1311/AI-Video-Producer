@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {available,avpDir,readJson,writeJson,sha,fileHash,loadEnv} from './utils.mjs';
 import {inspect,sourceFingerprint} from './inspect.mjs';
+import {analyzeProject} from './project-intelligence.mjs';
 import {gate,inputHashes} from './state.mjs';
 import {requireCoveragePlan,verificationMode} from './evidence.mjs';
 import {rehearsalPath} from './rehearsal.mjs';
@@ -52,7 +53,7 @@ function expectedStoryboard(config){
     ...(s.claims!==undefined?{claims:s.claims}:{})}));
 }
 function makeArtifacts(root,config){
-  const inventory=inspect(root,config),sourceHash=inventory.contentFingerprint;
+  const inventory=inspect(root,config),analysis=analyzeProject(root,config),sourceHash=inventory.contentFingerprint;
   const source={configHash:sha(config),sourceFingerprint:sourceHash};
   const coverage=sourcePlan(root,'feature-coverage.json');
   const storyboard=sourcePlan(root,'storyboard.json');
@@ -62,14 +63,28 @@ function makeArtifacts(root,config){
     id,status:'CANDIDATE_NOT_RUNTIME_VERIFIED',confidence:'UNVERIFIED',
     source:'project.json',sceneIds:config.scenes.filter(s=>(s.featureIds||[]).includes(id)).map(s=>s.id)}));
   const profile={schemaVersion:SCHEMA,...source,title:config.title,sourcePath:config.sourcePath,
-    appUrl:config.appUrl,analysisLevel:'STATIC_FILE_INVENTORY_ONLY',
+    appUrl:config.appUrl,analysisLevel:analysis.analysisLevel,
+    projectIntelligenceHash:sha(analysis),
+    technology:analysis.technology,runtime:analysis.runtime,
+    detectedRoutes:analysis.routes,capabilitySignals:analysis.capabilitySignals,
+    inspectedSource:analysis.scanned,
     fileCount:inventory.fileCount,importantFiles:inventory.important,
     openQuestions:['Runtime initialization and dependencies must be independently verified',
       'Feature inventory is candidate data until actual Playwright assertions pass']};
   const featureInventory={schemaVersion:SCHEMA,...source,features,
-    note:'The feature candidate list is not verified runtime evidence.'};
+    sourceDiscoveredCandidates:analysis.routes.map(route=>({
+      id:'source-route-'+sha(route.path+'|'+route.method).slice(0,12),
+      route:route.path,method:route.method,evidence:route.evidence,
+      status:'SOURCE_DECLARED_UNVERIFIED',runtimeVerified:false
+    })),
+    detectedCapabilitySignals:analysis.capabilitySignals,
+    note:'Both user-configured features and source route/capability signals remain unverified until runtime evidence.'};
   const capabilityProfile={schemaVersion:SCHEMA,...source,
     strategy:'BUNDLED_FIRST_NO_EXTERNAL_SKILL_INSTALL',
+    projectCapabilityNeeds:analysis.capabilitySignals.map(s=>({
+      id:s.id,neededCapabilities:s.neededCapabilities,sourceEvidence:s.evidence,
+      status:'DISCOVERED_NOT_MATCHED_OR_TESTED'
+    })),
     requirements:config.scenes.map(s=>({
       sceneId:s.id,requiredActions:[...new Set(s.capture.actions.map(a=>a.type))],
       requestedAdapter:s.capture?.adapter||null,
@@ -100,6 +115,7 @@ function makeArtifacts(root,config){
   const production={
     schemaVersion:SCHEMA,...source,
     kind:'BUILD_COMPILED_EXECUTION_CANDIDATE',
+    projectIntelligenceHash:sha(analysis),
     constraint:'No scene runtime evidence is inherited from a rehearsal',
     artifactHashes:refs,
     coverageHash:fileHash(coverage),storyboardHash:fileHash(storyboard),

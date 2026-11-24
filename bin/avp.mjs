@@ -8,6 +8,7 @@ import {inspectEvidence,verificationMode} from '../src/evidence.mjs';
 import {parseArgs,getProject,writeJson,readJson,avpDir,available,sha,sceneDir,safeName,run} from '../src/utils.mjs';
 import {loadState,saveState,sceneState,approve,gate,requireUnlocked,staleParts,invalidateOutput} from '../src/state.mjs';
 import {inspect} from '../src/inspect.mjs';
+import {inspectProject} from '../src/project-intelligence.mjs';
 import {capture,voice,captions,preview,qaScene,render,probe} from '../src/media.mjs';
 import {snapshotScene,restoreSceneSnapshot,listSceneSnapshots} from '../src/revisions.mjs';
 import {prepareBuild,checkBuild,freezeBuild,requireBuildGate,requiresBuild} from '../src/build.mjs';
@@ -19,6 +20,7 @@ Usage: avp <command> [--project DIR] [--scene ID] [options]
   doctor                     Check Node, FFmpeg/ffprobe, Playwright/Remotion
   init [DIR]                 Copy a project configuration (no API calls)
   inspect                    Inventory source paths without LLM
+  analyze                    Discover static stack/routes/capability clues (NOT runtime-verified)
   route --task TASK           Quality-first capability plan and quota preflight (no tool calls)
     --risk high --complexity complex --available id1,id2
     --profile economy|balanced|quality (override project profile)
@@ -79,6 +81,7 @@ async function buildScene(root,config,state,scene,args){requireBuildGate(root,co
 async function main(){const args=parseArgs(process.argv.slice(2));const command=args._[0]||'help';if(['help','--help','-h'].includes(command)){usage();return;}if(command==='doctor'){process.exitCode=doctor();return;}if(command==='init'){init(args._[1]||args.project);return;}const {root,config}=getProject(args.project||'.');const state=loadState(root);
   switch(command){
     case 'inspect':console.log(JSON.stringify(inspect(root,config),null,2));break;
+    case 'analyze':console.log(JSON.stringify(inspectProject(root,config),null,2));break;
     case 'evidence':console.log(JSON.stringify(inspectEvidence(root,config,state,{isCaptureStale:scene=>staleParts(scene,config,sceneState(state,scene.id),root).capture}),null,2));break;
     case 'build':{
       const op=args._[1]||'check';

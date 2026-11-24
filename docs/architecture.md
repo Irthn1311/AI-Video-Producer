@@ -1,5 +1,9 @@
 # Architecture: agent-first, local-first and scene-first
 
+## Project-specific source intelligence (F-02 — PARTIAL)
+
+`src/project-intelligence.mjs` performs bounded, local static scanning, extracts manifests, framework/route candidates and source-linked domain capability signals. The Build Package includes these separately from configured feature claims; neither source findings nor BUILD rehearsals are a substitute for current Production evidence. No repository code is executed and no external skills are fetched. The agent must interpret/verify findings and handle uncertainty. [Detail](project-intelligence.md).
+
 ## Two-phase BUILD/PRODUCTION handoff (first vertical slice)
 
 `src/build.mjs` compiles `project.json`, source inventory, configured feature candidates, bundled capability/tool snapshots, creative brief, approved planning data, and scene capture recipes into `.avp/build/production-plan.json`. `src/rehearsal.mjs` executes the **same** Playwright action runner as real capture (`src/capture-actions.mjs`) without recording video; rehearsal proof must remain distinct from the subsequent scene capture evidence. A source/config/planning/tool/rehearsal hash-bound `build-lock.json` is required for CLI production in Build-enabled projects. User review and `avp build freeze --confirm` are explicit. Legacy projects are not silently migrated.

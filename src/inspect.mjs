@@ -6,6 +6,8 @@ import {writeJson,sha,isWithin,avpDir} from './utils.mjs';
 const excluded=new Set(['.git','node_modules','.next','dist','build','coverage','.venv','venv','.avp','.tmp','graphify-out','vendor','.cache','target','out']);
 const sensitive=/^\.env|secret|credential|\.pem$|\.key$|password|token/i;
 const sourceFile=/\.(js|jsx|mjs|cjs|ts|tsx|py|go|rs|java|md|json|yml|yaml|toml|html|css|vue|svelte)$/i;
+// Recognized metadata manifests: include these exactly, not arbitrary .txt or .xml files.
+const manifestFile=/^(?:requirements(?:-[a-z0-9_-]+)?\.txt|go\.mod|pom\.xml)$/i;
 
 /** Deterministic, local-only content fingerprint. Does not read secrets, symlinks or dependencies. */
 export function scanSource(root,config){
@@ -24,7 +26,7 @@ export function scanSource(root,config){
       }else if(ent.isFile()){
         if(sensitive.test(ent.name)||ent.name.includes('.private.')){skipped++;continue;}
         const stat=fs.statSync(full);
-        if(stat.size>512000||!sourceFile.test(ent.name)){skipped++;continue;}
+        if(stat.size>512000||(!sourceFile.test(ent.name)&&!manifestFile.test(ent.name))){skipped++;continue;}
         const relative=path.relative(source,full).replaceAll('\\','/');
         if(source===path.resolve(root)&&relative==='project.json')continue;
         const digest=crypto.createHash('sha256').update(fs.readFileSync(full)).digest('hex');

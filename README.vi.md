@@ -39,6 +39,10 @@ Ghép và xuất MP4
 | **Rendering** | FFmpeg; tùy chọn backend Remotion |
 | **QA** | Kiểm tra kỹ thuật và lưu bằng chứng theo cảnh |
 
+## Project Intelligence — phân tích source theo đặc thù dự án
+
+`avp analyze` khảo sát mã nguồn cục bộ để nhận diện framework, entrypoints, routes/API và các tín hiệu chuyên biệt như canvas, ghép thiết bị, WebSocket, charts hoặc bản đồ. Kết quả được đưa vào Build Package cùng đường dẫn chứng cứ, **không tự chạy mã của app hay gọi AI trả phí**. Đây chỉ là **dấu hiệu từ source**, chưa khẳng định chức năng hoạt động thật. [Hướng dẫn](docs/project-intelligence.md).
+
 ## BUILD → PRODUCTION: chuẩn bị đủ trước khi quay
 
 Project mới tạo bằng `avp init` yêu cầu giai đoạn BUILD: `avp build prepare` tạo các artifact và kế hoạch; `avp build rehearse --scene ID --allow-actions` chạy thử thao tác Playwright thực tế **không quay video**; `avp build freeze --confirm` chốt production plan đã được xem xét. Thiếu công cụ, lỗi assertion, thay source/plan sẽ chặn Production. Project cũ vẫn tương thích cho tới khi chủ động bật BUILD. **Chưa tự tìm skill ngoài Internet hoặc tự thiết kế sáng tạo hoàn toàn.** [Hướng dẫn](docs/build-production.md).

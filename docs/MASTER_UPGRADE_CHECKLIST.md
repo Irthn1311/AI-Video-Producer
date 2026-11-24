@@ -71,6 +71,10 @@
 
 ## A3. Project-specific Module / Adapter Builder — P0
 
+> **F-03b first safe slice (PARTIAL — chưa tick Done):** `src/adapters.mjs` và CLI `adapters init/status/approve/trial` đã hỗ trợ manifest recipe **declarative Playwright** trong project, operator review, real-browser trial trên loopback origin, hash-bound trial receipt, Build Gate + QA stale invalidation và shared recipe giữa rehearsal/capture. Capability không chứng minh được bằng actions hiện có vẫn BLOCKED (multi-device/pointer thật/payment). **Không có OS/container sandbox**, chỉ browser-origin guard; không chạy code/script từ GitHub, không tự động xây adapter, không hỗ trợ multi-context và chưa có benchmark 2 ứng dụng lạ. Các mục A3-01/A3-06/A3-08 chỉ đạt một phần, cần nghiệm thu theo kịch bản thực tế. Xem `docs/project-adapters.md`.
+
+
+
 - [ ] `A3-01` Định nghĩa interface/plugin contract cho adapter riêng của project: inputs, outputs, start state, end state, capture markers, assertions, reset/cleanup, error types, timeout, dependencies.
 - [ ] `A3-02` Agent tự tạo/cấu hình adapter khi built-in không đủ, lưu ở **project workspace** thay vì hardcode vào core AVP.
 - [ ] `A3-03` Cho phép Scripted Capture trong sandbox với quyền giới hạn, ngoài declarative actions; giới hạn filesystem/network/secrets và xác nhận trước khi chạy mã sinh ra.

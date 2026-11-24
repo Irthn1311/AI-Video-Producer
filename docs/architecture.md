@@ -1,5 +1,9 @@
 # Architecture: agent-first, local-first and scene-first
 
+## F-03b — Project-scoped declarative adapter review and trial (PARTIAL)
+
+`src/adapters.mjs` validates bounded JSON-only Playwright actions and project-owned provenance under `avp-adapters/<id>/manifest.json`. Explicit local review and a real same-origin-loopback Chromium trial produce hash-linked receipts; the BUILD gate and scene input hashes consume their current status. Both `src/rehearsal.mjs` and `src/media.mjs` use the **same adapter actions** and browser-origin route guard. `src/evidence.mjs` verifies claims against those effective assertions. External scripts, third-party executable code, OS sandboxing, multi-context capture and independent security attestations are **not implemented**. See [Project Adapters](project-adapters.md).
+
 ## F-03 — Project-specific skill research and bounded Build selection
 
 `src/skill-discovery.mjs` consumes the source-derived domain signals, maps each need to a trusted bundled implementation or a guidance-only skill, and builds deterministic capability/toolchain records with local file hashes. `config/domain-tools.json` is the reviewed catalog. `skills search --online` is a separate, opt-in, metadata-only GitHub research path with bounded queries and source/registry-keyed cache; its repositories are not installed or trusted. Explicit `capabilityRequirements` not satisfied by bundled implementations produce Build blockers, not fabricated readiness. See [Skill Discovery](skill-discovery.md).

@@ -211,6 +211,8 @@
 
 ## C1. Feedback → Repair Plan — P1
 
+> **F-07 integrated candidate (PARTIAL; CI pending):** agent-authored single-target repair request + storyboard proposal, hash-bound impact plan using actual stale inputs, preserve unrelated current scenes or fail closed, automatic pre-repair snapshot and content-addressed approved final archive, explicit apply + refreeze, quality sidecar snapshot coverage, declared external semantic review bound to preview/QA, speed-up restricted to explicit pause interiors. No independent shot recapture/cache, cross-scene dependency propagation, automatic NLP/semantic judgment, full transactional rollback or genuine crossfade. See `docs/targeted-repair.md`.
+
 - [ ] `C1-01` Nhận câu lệnh tự nhiên như “Cảnh 3 nhấn ABC quá nhanh, kết quả chưa hiện”; ánh xạ tới scene/shot/timestamp/action và claim.
 - [ ] `C1-02` Phân loại root cause: app bug, missing evidence, wrong action/timing, inaccurate script, camera/transition, TTS, captions, encoding, asset.
 - [ ] `C1-03` Sinh `repair-plan.json` gồm target, cause confidence, proposed fix, impacted dependency nodes, preserved nodes, expected cost/retries, approval needed.

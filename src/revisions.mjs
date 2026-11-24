@@ -6,9 +6,11 @@ import {sceneState,saveState,invalidateOutput,requireUnlocked,staleParts} from '
 
 const always=new Set([
   'capture.mp4','capture-report.json','voice.wav','voice-report.json',
-  'captions.srt','captions.json','preview.mp4','qa-report.json','edit-plan.json'
+  'captions.srt','captions.json','preview.mp4','qa-report.json','edit-plan.json',
+  'voice-master.wav','voice-master.json','quality-render.json','semantic-review.json'
 ]);
 const isManaged=rel=>always.has(rel)||
+  /^quality-frames\/frame-0[1-8]\.jpg$/.test(rel)||
   /^assets\/[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}\.mp4$/.test(rel)||
   /^evidence-[1-9][0-9]*\.png$/.test(rel)||
   /^capture-failure\.png$/.test(rel)||
@@ -31,11 +33,11 @@ function listManaged(root,scene) {
   const dir=sceneDir(root,scene.id),items=[];
   if(!fs.existsSync(dir))return items;
   for(const name of fs.readdirSync(dir)){
-    if(name==='assets'){
+    if(name==='assets'||name==='quality-frames'){
       const assetDir=path.join(dir,name),stat=fs.lstatSync(assetDir);
       if(!stat.isDirectory()||stat.isSymbolicLink())throw Error('Refusing symlinked/non-directory assets');
       for(const file of fs.readdirSync(assetDir)){
-        const rel='assets/'+file;
+        const rel=name+'/'+file;
         if(isManaged(rel)&&regularFile(path.join(assetDir,file)))items.push(rel);
       }
     }else if(isManaged(name)&&regularFile(path.join(dir,name)))items.push(name);
@@ -83,6 +85,7 @@ export function snapshotScene(root,config,scene,state,{label=null}={}) {
       const source=path.join(dir,rel),target=path.join(stage,rel);
       fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(source,target);
       const size=fs.statSync(source).size;
+      if(fs.statSync(target).size!==size||digest(source)!==digest(target))throw Error('Snapshot source changed during copy');
       manifest.files.push({rel,sha256:digest(target),size});
       manifest.totalBytes+=size;
     }
@@ -154,7 +157,7 @@ export function restoreSceneSnapshot(root,config,scene,state,version) {
       fs.renameSync(path.join(stage,item.rel),target);
     }
     // Never restore a previous QA/approval as if the new working state were reviewed.
-    fs.rmSync(path.join(dir,'qa-report.json'),{force:true});
+    fs.rmSync(path.join(dir,'qa-report.json'),{force:true});fs.rmSync(path.join(dir,'semantic-review.json'),{force:true});
     const ss=sceneState(state,scene.id);
     ss.artifacts=structuredClone(manifest.artifactState);
     ss.approved=false;ss.locked=false;
@@ -168,5 +171,10 @@ export function restoreSceneSnapshot(root,config,scene,state,version) {
       approvalRestored:false,qaRestored:false,
       configMatches:manifest.configHash===sha(config),
       stale:freshness,note:'Run QA and re-approve; stale source/input requires rebuild.'};
+  }catch(e){
+    // A verified pre-restore backup remains available; never claim partial working bytes are approved.
+    const ss=sceneState(state,scene.id);ss.approved=false;ss.locked=false;delete ss.qa;delete ss.approvedPreviewHash;delete ss.approvedQaHash;
+    invalidateOutput(state);state.history.push({event:'scene-restore-failed',scene:scene.id,version,backup:backup?.version||null,at:new Date().toISOString()});saveState(root,state);
+    throw Error('Restore failed; working scene is unapproved. Recover from verified pre-restore backup '+(backup?.version||'unavailable')+' after inspecting local files.',{cause:e});
   }finally{fs.rmSync(stage,{recursive:true,force:true});}
 }

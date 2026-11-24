@@ -39,6 +39,10 @@ Ghép và xuất MP4
 | **Rendering** | FFmpeg; tùy chọn backend Remotion |
 | **QA** | Kiểm tra kỹ thuật và lưu bằng chứng theo cảnh |
 
+## Tìm skill/tool theo đặc thù dự án (F-03 — PARTIAL)
+
+`avp skills recommend` đối chiếu nhu cầu rút từ source với implementation và skill hướng dẫn sẵn có trong AVP. `avp skills search --online` chỉ khi được cho phép sẽ tra cứu metadata repository trên GitHub theo năng lực còn thiếu. **Tìm thấy repo không có nghĩa đã kiểm chứng/cài/chạy được skill.** Các năng lực bắt buộc nhưng chưa có implementation sẽ chặn Build. [Hướng dẫn](docs/skill-discovery.md).
+
 ## Project Intelligence — phân tích source theo đặc thù dự án
 
 `avp analyze` khảo sát mã nguồn cục bộ để nhận diện framework, entrypoints, routes/API và các tín hiệu chuyên biệt như canvas, ghép thiết bị, WebSocket, charts hoặc bản đồ. Kết quả được đưa vào Build Package cùng đường dẫn chứng cứ, **không tự chạy mã của app hay gọi AI trả phí**. Đây chỉ là **dấu hiệu từ source**, chưa khẳng định chức năng hoạt động thật. [Hướng dẫn](docs/project-intelligence.md).

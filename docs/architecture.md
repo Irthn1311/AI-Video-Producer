@@ -1,6 +1,10 @@
 # Architecture: agent-first, local-first and scene-first
 
-## Project-specific source intelligence (F-02 — PARTIAL)
+## F-03 — Project-specific skill research and bounded Build selection
+
+`src/skill-discovery.mjs` consumes the source-derived domain signals, maps each need to a trusted bundled implementation or a guidance-only skill, and builds deterministic capability/toolchain records with local file hashes. `config/domain-tools.json` is the reviewed catalog. `skills search --online` is a separate, opt-in, metadata-only GitHub research path with bounded queries and source/registry-keyed cache; its repositories are not installed or trusted. Explicit `capabilityRequirements` not satisfied by bundled implementations produce Build blockers, not fabricated readiness. See [Skill Discovery](skill-discovery.md).
+
+## Project-specific source intelligence (F-02 — PART)
 
 `src/project-intelligence.mjs` performs bounded, local static scanning, extracts manifests, framework/route candidates and source-linked domain capability signals. The Build Package includes these separately from configured feature claims; neither source findings nor BUILD rehearsals are a substitute for current Production evidence. No repository code is executed and no external skills are fetched. The agent must interpret/verify findings and handle uncertainty. [Detail](project-intelligence.md).
 

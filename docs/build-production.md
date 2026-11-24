@@ -17,6 +17,11 @@ node bin/avp.mjs init ./my-video
 
 node bin/avp.mjs analyze --project ./my-video
 # Inspect source-derived stack/routes/capability hypotheses; these are not verified features.
+node bin/avp.mjs skills recommend --project ./my-video
+# Review source-derived requirements and declare truly necessary ones in
+# project.json.capabilityRequirements. Guidance is not implementation.
+# Optional research only, with explicit network consent:
+# node bin/avp.mjs skills search --project ./my-video --online
 node bin/avp.mjs plan --project ./my-video
 # Inspect .avp/planning/feature-coverage.json and storyboard.json
 node bin/avp.mjs approve --stage coverage --project ./my-video
@@ -54,8 +59,8 @@ The directory `.avp/build/` contains:
 ```text
 project-profile.json       # bounded source stack/routes/capability signals; NO runtime claims
 feature-inventory.json     # configured feature candidates + source route hypotheses, UNVERIFIED
-capability-profile.json    # built-in capabilities and unresolved adapters
-toolchain-lock.json        # actual local bundled tool availability; no Internet install
+capability-profile.json    # trusted bundled matching, source needs, required gaps and scene actions
+toolchain-lock.json        # local tool versions + domain registry/file hashes; external installs []
 creative-brief.json        # draft creative settings from explicit project config
 storyboard.json            # snapshot of reviewed storyboard data
 production-plan.json       # compiled capture recipes, claims, scene/shot IDs, dependencies
@@ -71,7 +76,7 @@ Build checks current source/config hashes, storyboard/coverage approvals, the co
 
 ## Limits that remain on the MASTER checklist
 
-- `analyze` adds bounded, static stack/routes/capability signals but is **not** autonomous Repository Intelligence: no live feature validation, business logic investigation or third-party skill search. See [Project Intelligence](project-intelligence.md).
+- `analyze` adds bounded stack/routes/capability signals; `skills recommend` adds local matching and `skills search --online` can search **external repository metadata only**. These are not autonomous full repo comprehension, publisher/trust review or third-party skill installation. See [Skill Discovery](skill-discovery.md). See [Project Intelligence](project-intelligence.md).
 - Build currently supports **built-in declarative** capture actions. A custom adapter requirement causes `BLOCKED`; it is not silently executed. Reviewed sandboxed adapter runtime comes in A3.
 - Creative brief is derived from project settings and reviewed during explicit freeze; no proactive interview/Creative Director is implemented yet.
 - The first contract stores basic shot IDs but no proven shot-isolation/dependency DAG. It does **not** enable shot-level repair.

@@ -53,6 +53,10 @@
 
 ## A2. Dynamic Capability / Skill Discovery — P0
 
+> **F-03 first slice (PARTIAL, chưa tick Done):** `src/skill-discovery.mjs` và `config/domain-tools.json` nối signals từ Project Intelligence với bộ implementation/skill local theo từng dự án; phân biệt `BUNDLED_IMPLEMENTATION_AVAILABLE`, `GUIDANCE_ONLY`, `NO_BUNDLED_MATCH`. `avp skills search --online` tìm **GitHub repository metadata có giới hạn, chỉ khi có opt-in**, cache theo source/registry; không tải/cài/chạy. `project.json.capabilityRequirements` làm Build chặn capability bắt buộc chưa có implementation. Capability Profile/Toolchain Lock giữ hash local. **Chưa xong A2**: chưa đánh giá code/license/permission đến mức trusted, chưa pin commit upstream hoặc thử nghiệm sandbox, chưa có lazy-load runtime/agent orchestrator, chưa benchmark 2 app lạ thực tế. Xem `docs/skill-discovery.md` và PR F-03.
+
+
+
 - [ ] `A2-01` Rút ra **capability requirements từ từng feature/cảnh**, trước khi tìm skill; ví dụ `draw on canvas`, `pair devices`, `verify OCR`.
 - [ ] `A2-02` Đối chiếu kho có sẵn trước (`Playwright`, FFmpeg, Remotion, AVP skills, CLI, adapters); không tìm/trang bị công cụ trùng lặp vô ích.
 - [ ] `A2-03` Tìm nguồn **bên ngoài** khi thiếu năng lực: skill registry, GitHub, MCP servers, thư viện, CLI, tài liệu API; tìm có mục tiêu, không thu gom hàng loạt.

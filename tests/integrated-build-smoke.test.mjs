@@ -137,18 +137,6 @@ async function exercise(kind){
       assert.equal((await json(root,'build','freeze','--confirm')).status,'READY');
     }
     const first=await workflowDispatch(root,'capture','--allow-actions');assert.equal(first.next.kind,'voice');
-    if(kind==='dashboard'){
-      // Fault injection: emulate a crash after artifact persistence but before journal completion.
-      const file=path.join(root,'.avp','production',first.next.revision+'.json'),journal=readJson(file);
-      assert.equal(journal.events.at(-1).status,'EXECUTED');journal.events.pop();writeJson(file,journal);
-      const captureFile=path.join(sceneDir(root,'overview'),'capture.mp4'),before=fileHash(captureFile);
-      const interrupted=await observe(root,'workflow','next');assert.equal(interrupted.status,'RECOVERY_REQUIRED');
-      assert.equal((await observe(root,'production','step')).code,'EXPLICIT_RECOVERY_REQUIRED');
-      assert.equal((await observe(root,'production','step','--retry-failed')).code,'INTERRUPTED_STATE_REVIEW_REQUIRED');
-      assert.equal((await json(root,'production','step','--retry-failed','--confirm-reset')).status,'RECONCILED');
-      assert.equal(fileHash(captureFile),before);assert.equal(readJson(file).events.filter(e=>e.kind==='capture'&&e.status==='RUNNING').length,1);
-      assert.equal((await json(root,'telemetry')).currentProduction.totals.reconciled,1);
-    }
     // Rehearsal proof alone never permits skipping real capture. All production media steps use the workflow.
     for(const scene of current.scenes){
       if(scene.id!=='overview')await workflowDispatch(root,'capture','--allow-actions');
@@ -262,11 +250,23 @@ test('managed Node lifecycle is used by actual rehearsal and capture',{skip:proc
     assert.equal((await json(root,'build','freeze','--confirm')).status,'READY');
     await assert.rejects(cli(root,'production','step','--allow-actions'),e=>JSON.parse(e.stdout).code==='APP_LAUNCH_AUTHORIZATION_REQUIRED');
     next=await json(root,'workflow','next');assert.equal(next.kind,'production');assert.equal(next.operation,'capture');
-    assert.equal((await json(root,'workflow','step','--hash',next.taskHash,'--allow-actions','--allow-launch')).status,'EXECUTED');
+    const managedFirst=await json(root,'workflow','step','--hash',next.taskHash,'--allow-actions','--allow-launch');assert.equal(managedFirst.status,'EXECUTED');
     const report=readJson(path.join(sceneDir(root,'managed'),'capture-report.json'));
     assert.equal(report.appSession.manifestHash,status.manifestHash);
     assert.equal(report.status,'PASS');
     await assert.rejects(fetch(config.appUrl,{signal:AbortSignal.timeout(1000)}));
+    {
+      // Fault injection: emulate a crash after artifact persistence but before journal completion.
+      const file=path.join(root,'.avp','production',managedFirst.next.revision+'.json'),journal=readJson(file);
+      assert.equal(journal.events.at(-1).status,'EXECUTED');journal.events.pop();writeJson(file,journal);
+      const captureFile=path.join(sceneDir(root,'managed'),'capture.mp4'),before=fileHash(captureFile);
+      const interrupted=await observe(root,'workflow','next');assert.equal(interrupted.status,'RECOVERY_REQUIRED');
+      assert.equal((await observe(root,'production','step')).code,'EXPLICIT_RECOVERY_REQUIRED');
+      assert.equal((await observe(root,'production','step','--retry-failed')).code,'INTERRUPTED_STATE_REVIEW_REQUIRED');
+      assert.equal((await json(root,'production','step','--retry-failed','--confirm-reset')).status,'RECONCILED');
+      assert.equal(fileHash(captureFile),before);assert.equal(readJson(file).events.filter(e=>e.kind==='capture'&&e.status==='RUNNING').length,1);
+      assert.equal((await json(root,'telemetry')).currentProduction.totals.reconciled,1);
+    }
     await workflowDispatch(root,'captions');await workflowDispatch(root,'preview');
     const qa=await workflowDispatch(root,'qa');assert.equal(qa.step.kind,'qa');
     const semanticWait=await observe(root,'workflow','next');assert.equal(semanticWait.code,'SEMANTIC_REVIEW');

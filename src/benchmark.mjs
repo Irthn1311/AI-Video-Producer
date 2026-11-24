@@ -10,7 +10,6 @@ import {sourceFingerprint} from './inspect.mjs';
 import {semanticStatus} from './semantic-review.mjs';
 const hash=x=>typeof x==='string'&&/^[a-f0-9]{64}$/.test(x);
 const directory=root=>path.join(avpDir(root),'benchmarks');
-const kinds=['capture','voice','captions','preview','qa','render'];
 function mediaSec(file){const n=Number(JSON.parse(run('ffprobe',['-v','error','-show_entries','format=duration','-of','json',file])).format.duration);if(!Number.isFinite(n)||n<=0)throw Error('Invalid measured media duration');return n;}
 function toolVersion(name){return run(name,['-version']).split('\n')[0];}
 export function benchmarkRecord(root,config,state,{label,kind,scope,confirm=false}={}){
@@ -19,7 +18,7 @@ export function benchmarkRecord(root,config,state,{label,kind,scope,confirm=fals
   const build=checkBuild(root,config,state),next=productionNext(root,config);
   if(!build.ready||next.status!=='COMPLETE'||next.pending||!hash(next.revision))throw Error('Benchmark requires current complete frozen Production');
   const report=validateFinalOutput(root,config,state),t=telemetryReport(root,config,state),p=t.currentProduction;
-  if(!p||!t.artifacts.baselineAvailable||t.journalCoverage.invalid||t.journalCoverage.truncated||p.totals.open)
+  if(!p||!t.artifacts.baselineAvailable||t.journalCoverage.invalid||t.journalCoverage.truncated||p.totals.open||p.totals.reconciled)
     throw Error('Benchmark requires complete observable revision journal and baseline');
   const journal=readJson(path.join(avpDir(root),'production',next.revision+'.json'));
   if(!Number.isSafeInteger(journal.paidReservationBaseline)||journal.paidReservationBaseline<0)
@@ -27,7 +26,7 @@ export function benchmarkRecord(root,config,state,{label,kind,scope,confirm=fals
   const executed=journal.events.filter(e=>e.status==='EXECUTED');
   const baseline=journal.artifactBaseline;
   const current=Object.fromEntries(config.scenes.map(s=>[s.id,state.scenes[s.id]]));
-  const covered=executed.some(e=>e.kind==='render');
+  const covered=executed.some(e=>e.kind==='render'&&e.resultArtifact?.hash===state.output.hash&&e.resultArtifact?.qaHash===state.output.qaHash&&e.resultArtifact?.inputHash===state.output.inputHash);
   if(!covered)throw Error('Final render not observed in current Production journal');
   const parts=['capture','voice','captions','preview'];
   const rows=[];
@@ -38,7 +37,7 @@ export function benchmarkRecord(root,config,state,{label,kind,scope,confirm=fals
     for(const part of parts){
       if(part==='voice'&&config.voiceover?.enabled===false){artifactStatus[part]='DISABLED';continue;}
       const a=current[scene.id].artifacts?.[part],prior=old.artifacts?.[part];
-      const event=executed.find(e=>e.sceneId===scene.id&&e.kind===part&&e.outcome!=='REUSED');
+      const event=executed.find(e=>e.sceneId===scene.id&&e.kind===part&&e.outcome!=='REUSED'&&e.resultArtifact?.hash===a?.hash&&e.resultArtifact?.inputHash===a?.inputHash&&e.resultArtifact?.builtAt===a?.builtAt);
       const unchanged=prior?.status==='CURRENT'&&prior.hash===a?.hash&&prior.inputHash===a?.inputHash&&prior.builtAt===a?.builtAt;
       artifactStatus[part]=unchanged?'PRESERVED':event?'EXECUTED':'UNOBSERVED';
       if(artifactStatus[part]==='UNOBSERVED')throw Error('Artifact changed without journaled execution: '+scene.id+'/'+part);

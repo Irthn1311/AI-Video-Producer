@@ -185,7 +185,9 @@ export async function productionStep(root,opts={}){
       const current=getProject(root).config;
       if(sha(current)!==sha(config)||revisionFor(root,current,loadState(root)).revision!==next.revision)
         throw new ExecutionError('BUILD_DRIFT','Build changed while step was executing; inspect artifacts before reuse');
-      j.events.push({...event,status:'EXECUTED',at:now(),elapsedMs:Date.now()-start,outcome});
+      const persisted=loadState(root),artifact=next.sceneId?persisted.scenes?.[next.sceneId]?.artifacts?.[next.kind]:null;
+      const resultArtifact=artifact?{hash:artifact.hash,inputHash:artifact.inputHash,builtAt:artifact.builtAt}:next.kind==='render'?{hash:persisted.output?.hash,inputHash:persisted.output?.inputHash,qaHash:persisted.output?.qaHash}:null;
+      j.events.push({...event,status:'EXECUTED',at:now(),elapsedMs:Date.now()-start,outcome,...(resultArtifact?{resultArtifact}:{})});
       writeJson(journalFile(root,next.revision),j);
       return {status:'EXECUTED',runId:j.runId,step:event,next:snapshot(root,current,loadState(root))};
     }catch(e){

@@ -1,0 +1,220 @@
+{
+  "schemaVersion": 1,
+  "intent": "Match project feature capability needs to bundled implementations/guides first; search externally only with explicit opt-in. Never install/run untrusted repositories.",
+  "needs": {
+    "pointer-interaction": {
+      "search": "playwright canvas pointer automation skill",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "browser-capture-guide",
+          "type": "guidance",
+          "path": ".agents/skills/browser-capture/SKILL.md"
+        }
+      ]
+    },
+    "canvas-assertions": {
+      "search": "playwright canvas drawing testing library",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "browser-capture-guide",
+          "type": "guidance",
+          "path": ".agents/skills/browser-capture/SKILL.md"
+        }
+      ]
+    },
+    "multi-context-browser": {
+      "search": "playwright multi context browser device pairing automation",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "browser-capture-guide",
+          "type": "guidance",
+          "path": ".agents/skills/browser-capture/SKILL.md"
+        }
+      ]
+    },
+    "session-state-assertions": {
+      "search": "playwright multi device session synchronization testing",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "capture-assertions",
+          "type": "guidance",
+          "path": "src/capture-assertions.mjs"
+        }
+      ]
+    },
+    "websocket-observation": {
+      "search": "playwright websocket event monitoring testing",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "browser-capture-guide",
+          "type": "guidance",
+          "path": ".agents/skills/browser-capture/SKILL.md"
+        }
+      ]
+    },
+    "state-synchronization": {
+      "search": "playwright realtime state synchronization testing",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "capture-assertions",
+          "type": "guidance",
+          "path": "src/capture-assertions.mjs"
+        }
+      ]
+    },
+    "streaming-assertions": {
+      "search": "playwright server sent events streaming response tests",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "capture-assertions",
+          "type": "guidance",
+          "path": "src/capture-assertions.mjs"
+        }
+      ]
+    },
+    "timed-capture": {
+      "search": "playwright deterministic wait screenshot capture",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "capture-action-runner",
+          "type": "implementation",
+          "path": "src/capture-actions.mjs"
+        }
+      ]
+    },
+    "map-interaction": {
+      "search": "playwright mapbox leaflet UI testing automation",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "browser-capture-guide",
+          "type": "guidance",
+          "path": ".agents/skills/browser-capture/SKILL.md"
+        }
+      ]
+    },
+    "geolocation-test-context": {
+      "search": "playwright geolocation permissions browser context",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "browser-capture-guide",
+          "type": "guidance",
+          "path": ".agents/skills/browser-capture/SKILL.md"
+        }
+      ]
+    },
+    "chart-interaction": {
+      "search": "playwright recharts chart dashboard testing",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "browser-capture-guide",
+          "type": "guidance",
+          "path": ".agents/skills/browser-capture/SKILL.md"
+        }
+      ]
+    },
+    "data-assertions": {
+      "search": "playwright API DOM text assertions",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "capture-assertions",
+          "type": "implementation",
+          "path": "src/capture-assertions.mjs"
+        }
+      ]
+    },
+    "webgl-capture": {
+      "search": "playwright WebGL screenshot 3D capture testing",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "browser-capture-guide",
+          "type": "guidance",
+          "path": ".agents/skills/browser-capture/SKILL.md"
+        }
+      ]
+    },
+    "gpu-readiness": {
+      "search": "playwright webgl GPU testing readiness",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "browser-capture-guide",
+          "type": "guidance",
+          "path": ".agents/skills/browser-capture/SKILL.md"
+        }
+      ]
+    },
+    "device-permissions": {
+      "search": "playwright browser camera microphone permissions mocks",
+      "risk": "high",
+      "bundled": [
+        {
+          "id": "browser-capture-guide",
+          "type": "guidance",
+          "path": ".agents/skills/browser-capture/SKILL.md"
+        }
+      ]
+    },
+    "media-fixture": {
+      "search": "playwright fake video device media fixture",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "browser-capture-guide",
+          "type": "guidance",
+          "path": ".agents/skills/browser-capture/SKILL.md"
+        }
+      ]
+    },
+    "upload-fixture": {
+      "search": "playwright file upload fixture setInputFiles",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "browser-capture-guide",
+          "type": "guidance",
+          "path": ".agents/skills/browser-capture/SKILL.md"
+        }
+      ]
+    },
+    "file-verification": {
+      "search": "playwright uploaded file backend verification",
+      "risk": "normal",
+      "bundled": [
+        {
+          "id": "capture-assertions",
+          "type": "guidance",
+          "path": "src/capture-assertions.mjs"
+        }
+      ]
+    },
+    "sandbox-checkout": {
+      "search": "stripe sandbox checkout playwright test integration",
+      "risk": "high",
+      "bundled": []
+    },
+    "transaction-safety-review": {
+      "search": "payment integration testing sandbox transaction review",
+      "risk": "high",
+      "bundled": [
+        {
+          "id": "video-qa-guide",
+          "type": "guidance",
+          "path": ".agents/skills/video-qa/SKILL.md"
+        }
+      ]
+    }
+  }
+}

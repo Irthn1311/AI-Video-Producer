@@ -4,16 +4,17 @@ import {avpDir,readJson,writeJson,fileHash,sha,safeName} from './utils.mjs';
 import {sourceFingerprint} from './inspect.mjs';
 import {validateCaptureEvidenceConfig} from './capture-assertions.mjs';
 import {executeCaptureAction} from './capture-actions.mjs';
+import {validatePointerPath,hasPointerTransition} from './pointer-actions.mjs';
 
 const MAX_ACTIONS=50;
 const allowedActions=new Set(['goto','click','fill','hover','waitFor','pause','scroll',
-  'assertVisible','assertText','assertAttribute','clickExpectResponse']);
+  'assertVisible','assertText','assertAttribute','clickExpectResponse','pointerPath']);
 const assertionTypes=new Set(['assertVisible','assertText','assertAttribute','clickExpectResponse']);
 // Declarative browser actions cannot prove arbitrary semantic capabilities,
 // e.g. multi-context pairing, handwriting gestures or payment settlement.
-const verifiedByV1=new Set(['data-assertions','timed-capture','app-feature-demo']);
+const verifiedByV1=new Set(['data-assertions','timed-capture','app-feature-demo','pointer-interaction']);
 const actionKeys=new Set(['type','path','testId','role','name','label','text','value','timeoutMs',
-  'ms','y','evidenceId','evidenceScreenshot','expectedText','attribute','expectedValue','response']);
+  'ms','y','evidenceId','evidenceScreenshot','expectedText','attribute','expectedValue','response','points']);
 const responseKeys=new Set(['pathContains','method','status','bodyIncludes']);
 const idValid=id=>typeof id==='string'&&/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(id);
 const adapterDir=(root,id)=>path.join(avpDir(root),'adapters',safeName(id));
@@ -51,7 +52,9 @@ function boundedActions(actions,label,{allowEmpty=false}={}){
   for(const [i,a] of actions.entries()){
     keys(a,actionKeys,label+'['+i+']');
     if(!allowedActions.has(a.type))throw Error('Adapter prohibits arbitrary scripts/commands/actions: '+String(a.type));
+    if(a.type==='pointerPath'){validatePointerPath(a);continue;}
     for(const [k,v] of Object.entries(a)){
+      if(k==='points')throw Error('points are only valid for pointerPath');
       if(k==='response'){keys(v,responseKeys,'response');continue;}
       if(['ms','y','timeoutMs'].includes(k)){
         if(!Number.isInteger(v)||v<0||v>30000)throw Error('Adapter numeric action parameter out of range: '+k);
@@ -130,7 +133,7 @@ export function adapterFingerprint(root,config,scene){
   if(!scene.capture?.adapter)return null;
   try{
     const {hash}=ensureManifest(root,config,scene),id=scene.capture.adapter;
-    return {id,manifestHash:hash,
+    return {id,manifestHash:hash,engineHash:engineHash(),
       reviewHash:safeFile(reviewPath(root,id))?fileHash(reviewPath(root,id)):null,
       receiptHash:safeFile(receiptPath(root,id))?fileHash(receiptPath(root,id)):null,
       reportHash:safeFile(reportPath(root,id))?fileHash(reportPath(root,id)):null};
@@ -168,7 +171,7 @@ export function approveAdapter(root,config,scene,{confirm=false}={}){
   const {data,hash}=ensureManifest(root,config,scene),id=data.id;
   const approval={
     schemaVersion:1,id,sceneId:scene.id,approvedAt:new Date().toISOString(),
-    manifestHash:hash,sourceFingerprint:sourceFingerprint(root,config),appOrigin:data.appOrigin,
+    manifestHash:hash,engineHash:engineHash(),sourceFingerprint:sourceFingerprint(root,config),appOrigin:data.appOrigin,
     permissionsHash:sha(data.permissions),
     humanDecision:'CONFIRMED_BY_LOCAL_CLI_OPERATOR_NOT_IDENTITY_ATTESTED',
     reviewed:{manifest:true,permissions:true,provenance:true,
@@ -180,12 +183,14 @@ export function approveAdapter(root,config,scene,{confirm=false}={}){
   fs.rmSync(receiptPath(root,id),{force:true});
   return {id,status:'REVIEWED_AWAITING_TRIAL',manifestHash:hash,approvalHash:fileHash(reviewPath(root,id))};
 }
+// Bind trial approval to the exact trusted interpreter, not just project JSON.
+function engineHash(){return sha(['adapters.mjs','capture-actions.mjs','capture-assertions.mjs','pointer-actions.mjs'].map(name=>fileHash(path.join(import.meta.dirname,name))));}
 function currentApproval(root,config,scene,manifestHash){
   const id=scene.capture.adapter,f=reviewPath(root,id);
   if(!safeFile(f))throw Error('Adapter requires explicit approval: avp adapters approve --confirm');
   const a=readJson(f),source=sourceFingerprint(root,config),origin=loopbackOrigin(config.appUrl);
   if(a.schemaVersion!==1||a.id!==id||a.sceneId!==scene.id||a.manifestHash!==manifestHash||
-    a.sourceFingerprint!==source||a.appOrigin!==origin||
+    a.sourceFingerprint!==source||a.appOrigin!==origin||a.engineHash!==engineHash()||
     a.humanDecision!=='CONFIRMED_BY_LOCAL_CLI_OPERATOR_NOT_IDENTITY_ATTESTED')
     throw Error('Adapter approval stale or mismatched; review and approve the current manifest/source');
   return {data:a,hash:fileHash(f)};
@@ -198,7 +203,7 @@ function reportPass(root,config,scene,approvalHash,manifestHash,manifest){
     id:x.evidenceId||x.type,type:x.type
   }));
   if(report.schemaVersion!==1||report.status!=='PASS'||report.scope!=='ADAPTER_BROWSER_TRIAL_NOT_PRODUCTION_EVIDENCE'||
-    report.actionsHash!==sha(manifest.actions)||!Array.isArray(report.actions)||
+    report.engineHash!==engineHash()||report.actionsHash!==sha(manifest.actions)||!Array.isArray(report.actions)||
     report.actions.length!==manifest.actions.length||
     report.actions.some((x,i)=>x.type!==manifest.actions[i].type)||
     report.assertions?.length!==expected.length||expected.some((x,i)=>
@@ -231,7 +236,7 @@ export function adapterStatus(root,config,scene){
     }
     const verifiedCapabilities=data.capabilities.filter(id=>verifiedByV1.has(id)&&(
       id==='data-assertions'||id==='app-feature-demo'||
-      data.actions.some(x=>x.type==='waitFor'||x.type==='pause')
+      (id==='pointer-interaction'?hasPointerTransition(data.actions):data.actions.some(x=>x.type==='waitFor'||x.type==='pause'))
     ));
     const unprovenCapabilities=data.capabilities.filter(x=>!verifiedCapabilities.includes(x));
     return {id,status:'TRIAL_PASS',manifestHash:hash,approvalHash:approval.hash,
@@ -277,7 +282,7 @@ export async function trialAdapter(root,config,scene,{allowActions=false}={}){
   const record={schemaVersion:1,status:'RUNNING',scope:'ADAPTER_BROWSER_TRIAL_NOT_PRODUCTION_EVIDENCE',
     adapterId:data.id,sceneId:scene.id,manifestHash:hash,approvalHash:approval.hash,
     sourceFingerprint:sourceFingerprint(root,config),appOrigin:data.appOrigin,
-    actionsHash:sha(data.actions),startedAt:new Date().toISOString(),
+    engineHash:engineHash(),actionsHash:sha(data.actions),startedAt:new Date().toISOString(),
     blockedExternalRequests:0,actions:[],assertions:[],pageErrors:[],resetPassed:false,
     warning:'Fresh browser context + same-origin routing is NOT an OS sandbox; app server may make external calls.'};
   const trialFile=reportPath(root,data.id),sealFile=receiptPath(root,data.id);
@@ -297,14 +302,14 @@ export async function trialAdapter(root,config,scene,{allowActions=false}={}){
     try{
       for(const a of data.actions){
         const start=Date.now();
-        await executeCaptureAction(page,a,{appUrl:config.appUrl,dir:null,report:record});
+        await executeCaptureAction(page,a,{appUrl:config.appUrl,dir:null,report:record,adapter:true});
         record.actions.push({type:a.type,ms:Date.now()-start});
       }
     }catch(e){error=e;}
     // Best-effort declarative reset; any reset failure fails the trial.
     try{
       for(const a of data.resetActions)
-        await executeCaptureAction(page,a,{appUrl:config.appUrl,dir:null,report:record});
+        await executeCaptureAction(page,a,{appUrl:config.appUrl,dir:null,report:record,adapter:true});
       record.resetPassed=true;
     }catch(e){record.resetPassed=false;error??=e;}
     const observed=record.assertions.map(a=>a.id);

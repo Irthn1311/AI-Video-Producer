@@ -53,3 +53,7 @@ jobs:
         env:
           AVP_BROWSER_SMOKE: '1'
         run: node --test tests/browser-evidence-smoke.test.mjs tests/default-project-browser-smoke.test.mjs tests/adapter-browser-smoke.test.mjs
+      - name: Validate integrated creative Build and Production on two browser fixtures
+        env:
+          AVP_INTEGRATED_SMOKE: '1'
+        run: node --test tests/integrated-build-smoke.test.mjs

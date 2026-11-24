@@ -40,6 +40,10 @@ flowchart LR
 
 **Scene-first by design.** Each scene keeps its own footage, narration, subtitles, preview, QA evidence, and review status. Previously approved scenes are protected from accidental regeneration. Changes invalidate dependent artifacts rather than restarting the entire project.
 
+## Current preview workflow
+
+Use [the unified workflow](docs/workflow.md) for bounded Build/Production dispatch, [managed app lifecycle](docs/app-runtime.md) for explicitly reviewed disposable Node fixtures, [production quality](docs/production-quality.md) for opt-in audio/caption/evidence QA, and [targeted repair](docs/targeted-repair.md) for hash-bound scene edits and archived releases. `review.semantic: "required"` optionally enforces a declared external review; it is not an LLM evaluator. [Benchmark protocol](docs/benchmark.md) separates actual local observations from unmeasured external effort. This is a preview: independent unknown-repo benchmarks, real MathMate parity and independent shot-level rendering remain open.
+
 ## Features
 
 | Capability | What it provides |

@@ -137,18 +137,6 @@ async function exercise(kind){
       assert.equal((await json(root,'build','freeze','--confirm')).status,'READY');
     }
     const first=await workflowDispatch(root,'capture','--allow-actions');assert.equal(first.next.kind,'voice');
-    if(kind==='dashboard'){
-      // Fault injection: emulate a crash after artifact persistence but before journal completion.
-      const file=path.join(root,'.avp','production',first.next.revision+'.json'),journal=readJson(file);
-      assert.equal(journal.events.at(-1).status,'EXECUTED');journal.events.pop();writeJson(file,journal);
-      const captureFile=path.join(sceneDir(root,'overview'),'capture.mp4'),before=fileHash(captureFile);
-      const interrupted=await observe(root,'workflow','next');assert.equal(interrupted.status,'RECOVERY_REQUIRED');
-      assert.equal((await observe(root,'production','step')).code,'EXPLICIT_RECOVERY_REQUIRED');
-      assert.equal((await observe(root,'production','step','--retry-failed')).code,'INTERRUPTED_STATE_REVIEW_REQUIRED');
-      assert.equal((await json(root,'production','step','--retry-failed','--confirm-reset')).status,'RECONCILED');
-      assert.equal(fileHash(captureFile),before);assert.equal(readJson(file).events.filter(e=>e.kind==='capture'&&e.status==='RUNNING').length,1);
-      assert.equal((await json(root,'telemetry')).currentProduction.totals.reconciled,1);
-    }
     // Rehearsal proof alone never permits skipping real capture. All production media steps use the workflow.
     for(const scene of current.scenes){
       if(scene.id!=='overview')await workflowDispatch(root,'capture','--allow-actions');
@@ -169,6 +157,8 @@ async function exercise(kind){
     assert.equal((await json(root,'workflow','next')).status,'COMPLETE');
     const finalAudit=readJson(path.join(root,'.avp','output','final-report.json'));assert.equal(finalAudit.sceneTimeline.length,2);assert.equal(finalAudit.sceneTimeline[0].startMs,0);assert.ok(finalAudit.sceneTimeline[1].startMs>0);
     assert.equal(finalAudit.semanticReview,'NOT_EVALUATED_BY_AUTOMATION');assert.equal(finalAudit.actualBilledUsd,null);
+    const fullBench=await json(root,'benchmark','record','--label',kind+'-full','--kind','full','--scope','fixture','--confirm');
+    assert.equal(fullBench.scope,'AUTHOR_KNOWN_FIXTURE');assert.ok(fullBench.regeneratedPreviewSec>0);assert.equal(fullBench.reservedCallsDelta,0);
     const unchanged=sceneDir(root,'overview'),changed=sceneDir(root,'workflow');
     const keep=['capture.mp4','voice.wav','preview.mp4','qa-report.json'].map(n=>fileHash(path.join(unchanged,n)));
     const keepChanged=['capture.mp4','voice.wav'].map(n=>fileHash(path.join(changed,n)));
@@ -207,9 +197,15 @@ async function exercise(kind){
     assert.ok(telemetry.artifacts.unchangedCurrentSinceFirstDispatch.some(a=>a.sceneId==='workflow'&&a.kind==='capture'));
     assert.ok(!telemetry.artifacts.unchangedCurrentSinceFirstDispatch.some(a=>a.sceneId==='workflow'&&a.kind==='preview'));
     assert.equal(telemetry.currentProduction.byKind.preview.executed,1);
-    assert.equal((await json(root,'qa','--scene','workflow')).pass,true);
+    await workflowDispatch(root,'qa');
     await cli(root,'approve','--stage','scene','--scene','workflow');
-    assert.equal((await json(root,'render')).pass,true);
+    await workflowDispatch(root,'render');await cli(root,'approve','--stage','final');
+    const repairBench=await json(root,'benchmark','record','--label',kind+'-repair','--kind','repair','--scope','fixture','--confirm');
+    assert.equal(repairBench.regeneratedCaptureSec,0);assert.equal(repairBench.reservedCallsDelta,0);
+    assert.ok(repairBench.regeneratedPreviewSec<fullBench.regeneratedPreviewSec);
+    const comparison=await json(root,'benchmark','compare','--full',fullBench.id,'--repair',repairBench.id);
+    assert.equal(comparison.status,'UNMATCHED_INPUT_OBSERVATION');assert.equal(comparison.observedDispatchReductionPct,null);
+    console.log('AVP_BENCHMARK '+JSON.stringify({fixture:kind,full:fullBench,repair:repairBench,comparison}));
     assert.deepEqual(['capture.mp4','voice.wav','preview.mp4','qa-report.json'].map(n=>fileHash(path.join(unchanged,n))),keep);
     assert.deepEqual(['capture.mp4','voice.wav'].map(n=>fileHash(path.join(changed,n))),keepChanged);
     assert.equal(fileHash(path.join(root,'.avp','releases',applied.releaseId,'final.mp4')),originalFinal);
@@ -233,7 +229,7 @@ test('managed Node lifecycle is used by actual rehearsal and capture',{skip:proc
     fs.mkdirSync(path.join(root,'app'));
     fs.writeFileSync(path.join(root,'app','server.mjs'),`import http from 'node:http';http.createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end('<h1>Managed fixture</h1>');}).listen(Number(process.env.PORT),process.env.HOST);`);
     const config=readJson(path.join(repo,'templates','project.json'));config.sourcePath='app';config.appUrl='http://127.0.0.1:'+port;
-    config.workflow={requireBuild:true};config.review.mode='autonomous';config.voiceover.enabled=false;config.productionQuality={};
+    config.workflow={requireBuild:true};config.review.mode='autonomous';config.review.semantic='required';config.voiceover.enabled=false;config.productionQuality={};
     config.render={engine:'ffmpeg',width:320,height:180,fps:24,captionsBurned:false};
     config.appRuntime={mode:'managed-node',entrypoint:'server.mjs',readinessPath:'/',startupTimeoutMs:5000,reset:'fresh-process',isolation:'operator-approved-disposable-local-fixture'};
     config.scenes=[{id:'managed',title:'Managed fixture',durationSec:2,featureIds:['heading'],narration:'Managed fixture.',
@@ -254,13 +250,35 @@ test('managed Node lifecycle is used by actual rehearsal and capture',{skip:proc
     assert.equal((await json(root,'build','freeze','--confirm')).status,'READY');
     await assert.rejects(cli(root,'production','step','--allow-actions'),e=>JSON.parse(e.stdout).code==='APP_LAUNCH_AUTHORIZATION_REQUIRED');
     next=await json(root,'workflow','next');assert.equal(next.kind,'production');assert.equal(next.operation,'capture');
-    assert.equal((await json(root,'workflow','step','--hash',next.taskHash,'--allow-actions','--allow-launch')).status,'EXECUTED');
+    const managedFirst=await json(root,'workflow','step','--hash',next.taskHash,'--allow-actions','--allow-launch');assert.equal(managedFirst.status,'EXECUTED');
     const report=readJson(path.join(sceneDir(root,'managed'),'capture-report.json'));
     assert.equal(report.appSession.manifestHash,status.manifestHash);
     assert.equal(report.status,'PASS');
     await assert.rejects(fetch(config.appUrl,{signal:AbortSignal.timeout(1000)}));
+    {
+      // Fault injection: emulate a crash after artifact persistence but before journal completion.
+      const file=path.join(root,'.avp','production',managedFirst.next.revision+'.json'),journal=readJson(file);
+      assert.equal(journal.events.at(-1).status,'EXECUTED');journal.events.pop();writeJson(file,journal);
+      const captureFile=path.join(sceneDir(root,'managed'),'capture.mp4'),before=fileHash(captureFile);
+      const interrupted=await observe(root,'workflow','next');assert.equal(interrupted.status,'RECOVERY_REQUIRED');
+      assert.equal((await observe(root,'production','step')).code,'EXPLICIT_RECOVERY_REQUIRED');
+      assert.equal((await observe(root,'production','step','--retry-failed')).code,'INTERRUPTED_STATE_REVIEW_REQUIRED');
+      assert.equal((await json(root,'production','step','--retry-failed','--confirm-reset')).status,'RECONCILED');
+      assert.equal(fileHash(captureFile),before);assert.equal(readJson(file).events.filter(e=>e.kind==='capture'&&e.status==='RUNNING').length,1);
+      assert.equal((await json(root,'telemetry')).currentProduction.totals.reconciled,1);
+    }
     await workflowDispatch(root,'captions');await workflowDispatch(root,'preview');
     const qa=await workflowDispatch(root,'qa');assert.equal(qa.step.kind,'qa');
+    const semanticWait=await observe(root,'workflow','next');assert.equal(semanticWait.code,'SEMANTIC_REVIEW');
+    await deny(root,['render'],/Current declared semantic review required/);
+    const ctx=await json(root,'semantic','context','--scene','managed');
+    const submit=findings=>writeJson(path.join(root,'.avp','repair','semantic-review.json'),{schemaVersion:1,reviewHash:ctx.reviewHash,reviewer:'EXTERNAL_AGENT',findings});
+    submit(Object.fromEntries(ctx.dimensions.map(k=>[k,'NOT_EVALUATED'])));
+    await json(root,'semantic','record','--scene','managed','--hash',ctx.reviewHash,'--confirm');
+    assert.equal((await observe(root,'workflow','next')).code,'SEMANTIC_REVIEW');
+    // Synthetic declaration tests receipt enforcement, NOT actual independent semantic evaluation.
+    submit(Object.fromEntries(ctx.dimensions.map(k=>[k,'PASS'])));
+    await json(root,'semantic','record','--scene','managed','--hash',ctx.reviewHash,'--confirm');
     assert.equal((await workflowDispatch(root,'render')).next.status,'COMPLETE');
     assert.equal((await json(root,'workflow','next')).status,'COMPLETE');
   }finally{if(portServer.listening)await new Promise(r=>portServer.close(r));fs.rmSync(root,{recursive:true,force:true});}

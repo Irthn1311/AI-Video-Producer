@@ -14,6 +14,7 @@ import {ExecutionError,failureDetails} from './execution-errors.mjs';
 import {withAppRuntime,managedApp} from './app-runtime.mjs';
 import {qualityPolicy,qualityCaptionLimit} from './quality-policy.mjs';
 import {masterVoice,sealQualityRender,qualityScene,writeFinalAudit} from './production-quality.mjs';
+import {requireSemanticReview,semanticPolicy} from './semantic-review.mjs';
 const seconds=(value)=>Number(value||0);
 export function probe(file){return JSON.parse(run('ffprobe',['-v','error','-show_format','-show_streams','-of','json',file]));}
 export function mediaSeconds(file){return seconds(probe(file).format?.duration);}
@@ -176,6 +177,7 @@ function finalReport(root,config,state,engine,file){
   const checks={videoH264:v?.codec_name==='h264',audioAAC:a?.codec_name==='aac',width:v?.width===(config.render?.width||1920),height:v?.height===(config.render?.height||1080),duration:Math.abs(actual-target)<1,fullDecode:true};
   const report={schemaVersion:2,engine,file,durationSec:actual,scenes:config.scenes.length,checks,pass:Object.values(checks).every(Boolean),outputHash:fileHash(file),humanFinalApproval:false};
   if(!report.pass)throw new ExecutionError('FINAL_QA_FAILED','Final render failed technical QA',{failedChecks:Object.keys(checks).filter(k=>!checks[k])});
+  if(semanticPolicy(config))report.semanticReceipts=Object.fromEntries(config.scenes.map(s=>[s.id,requireSemanticReview(root,config,s,validateSceneQa(root,config,s,state)).receiptHash]));
   const audit=writeFinalAudit(root,config,state,file,report);if(audit)report.qualityExport=audit;
   const qa=path.join(avpDir(root),'output','final-qa.json');writeJson(qa,report);
   invalidateOutput(state);
@@ -188,7 +190,8 @@ export function render(root,config,state,opts={}){
   const outDir=path.join(avpDir(root),'output');fs.mkdirSync(outDir,{recursive:true});
   const previews=[];
   for(const s of config.scenes){
-    validateSceneQa(root,config,s,state); // Required in BOTH review and autonomous modes.
+    const qa=validateSceneQa(root,config,s,state); // Required in BOTH review and autonomous modes.
+    requireSemanticReview(root,config,s,qa);
     if(config.review.mode==='review')sceneApprovalValid(root,config,s,state);
     previews.push(path.join(sceneDir(root,s.id),'preview.mp4'));
   }

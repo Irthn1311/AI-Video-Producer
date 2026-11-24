@@ -26,6 +26,10 @@ Ghép và xuất MP4
 
 **Scene-first:** Mỗi cảnh giữ footage, audio, phụ đề, preview, QA và trạng thái duyệt riêng. Khi sửa kịch bản hoặc thao tác quay, AVP xác định các đầu ra bị ảnh hưởng, tránh dựng lại những phần không cần thiết.
 
+## Quy trình mới
+
+Dùng [workflow next/step](docs/workflow.md) để điều phối Build/Production, [managed runtime](docs/app-runtime.md) cho app Node thử nghiệm đã duyệt, [Production Quality](docs/production-quality.md) để kiểm tra audio/caption/evidence, và [Targeted Repair](docs/targeted-repair.md) để sửa đúng scene và lưu phiên bản final. `review.semantic: "required"` yêu cầu đánh giá bên ngoài gắn với preview hiện tại, không phải AI tự chấm. [Benchmark](docs/benchmark.md) phân biệt số liệu đo được và chi phí chưa biết. AVP vẫn ở mức preview; chưa nghiệm thu repository lạ, MathMate parity hoặc recapture độc lập từng shot.
+
 ## Chức năng chính
 
 | Thành phần | Khả năng |

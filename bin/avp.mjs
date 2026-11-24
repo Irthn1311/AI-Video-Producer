@@ -27,6 +27,7 @@ import {telemetryReport} from '../src/telemetry.mjs';
 import {repairPlan,applyRepair} from '../src/repair.mjs';
 import {archiveRelease,listReleases,verifyRelease} from '../src/release.mjs';
 import {semanticContext,recordSemanticReview} from '../src/semantic-review.mjs';
+import {benchmarkRecord,readBenchmark,compareBenchmarks,listBenchmarks} from '../src/benchmark.mjs';
 const apiSession={calls:0};
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 function usage(){console.log(`AI Video Producer v0.1 (local-first, software-demo)
@@ -75,7 +76,7 @@ Usage: avp <command> [--project DIR] [--scene ID] [options]
   asset add --scene ID --name NAME --file VIDEO  Import an authentic scene inset/shot source
   preview --scene ID         Render scene with FFmpeg or scene.edit Remotion
   qa --scene ID              Probe scene media (technical QA)
-  app status                 Inspect managed app manifest/approval/trial\n  app approve --hash HASH --confirm  Review exact local Node entrypoint/source\n  app trial --allow-launch   Start, probe readiness and clean up disposable app\n  repair plan|apply --hash HASH --confirm  Plan/checkpoint/apply one scoped storyboard repair\n  release archive --confirm | list | verify --hash HASH\n  semantic context|record --scene ID [--hash HASH --confirm]\n  telemetry                  Report observed journal durations, provider reservations and artifact reuse
+  app status                 Inspect managed app manifest/approval/trial\n  app approve --hash HASH --confirm  Review exact local Node entrypoint/source\n  app trial --allow-launch   Start, probe readiness and clean up disposable app\n  repair plan|apply --hash HASH --confirm  Plan/checkpoint/apply one scoped storyboard repair\n  release archive --confirm | list | verify --hash HASH\n  semantic context|record --scene ID [--hash HASH --confirm]\n  benchmark record --label ID --kind full|repair --scope fixture|external --confirm\n  benchmark list | compare --full HASH --repair HASH\n  telemetry                  Report observed journal durations, provider reservations and artifact reuse
   workflow next              Observe current Build/Production and next bounded task
   workflow step --hash HASH [--allow-actions] [--allow-launch] [--allow-paid-api] [--retry-failed] [--confirm-reset]  Execute one current task
   production next            Inspect next step of frozen Build (no execution)
@@ -159,6 +160,7 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
     case 'repair':{const op=args._[1]||'plan';const result=op==='plan'?repairPlan(root,config,state):op==='apply'?applyRepair(root,{hash:args.hash,confirm:args.confirm===true}):null;if(!result)throw Error('Use repair plan|apply');console.log(JSON.stringify(result,null,2));break;}
     case 'release':{const op=args._[1]||'list';if(op==='archive')requireBuildGate(root,config,state);const result=op==='list'?listReleases(root):op==='verify'?verifyRelease(root,args.hash):op==='archive'?archiveRelease(root,config,state,{confirm:args.confirm===true}):null;if(!result)throw Error('Use release list|verify|archive');console.log(JSON.stringify(result,null,2));break;}
     case 'semantic':{const scene=chooseScene(config,args),op=args._[1]||'context';const result=op==='context'?semanticContext(root,config,scene,state):op==='record'?recordSemanticReview(root,config,scene,state,{hash:args.hash,confirm:args.confirm===true}):null;if(!result)throw Error('Use semantic context|record');console.log(JSON.stringify(result,null,2));break;}
+    case 'benchmark':{const op=args._[1]||'list';const result=op==='record'?benchmarkRecord(root,config,state,{label:args.label,kind:args.kind,scope:args.scope,confirm:args.confirm===true}):op==='list'?listBenchmarks(root):op==='compare'?compareBenchmarks(readBenchmark(root,args.full),readBenchmark(root,args.repair)):null;if(!result)throw Error('Use benchmark record|list|compare');console.log(JSON.stringify(result,null,2));break;}
     case 'telemetry':console.log(JSON.stringify(telemetryReport(root,config,state),null,2));break;
     case 'workflow':{
       const op=args._[1]||'next';

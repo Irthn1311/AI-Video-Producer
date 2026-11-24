@@ -131,13 +131,14 @@ export async function workflowStep(root,opts={}){
     const {config}=getProject(root),next=observe(root,config);
     if(opts.hash!==next.taskHash)return {...next,status:'BLOCKED',code:'TASK_HASH_CHANGED',action:'Read workflow next and authorize the exact current task hash'};
     if(next.status!=='NEXT')return next;
-    if(next.kind==='production')return productionStep(root,opts);
+    if(next.kind==='production')return await productionStep(root,opts);
     const missing=(next.authorization||[]).filter(x=>x==='allow-actions'?!opts.allowActions:x==='allow-launch'?!opts.allowLaunch:true);
     if(missing.length)return {...next,status:'AUTHORIZATION_REQUIRED',missing};
     const key=next.kind+':'+(next.sceneId||''),file=journalFile(root,next.revision);
     const j=readJournal(root,next.revision)||{schemaVersion:1,runId:randomUUID(),revision:next.revision,events:[]};
     const event={key,kind:next.kind,stage:next.stage,sceneId:next.sceneId||null};
     j.events.push({...event,status:'RUNNING',at:now()});writeJson(file,j);const start=Date.now();
+    let current;
     try{
       switch(next.kind){
         case 'analyze':cache(root,'analysis',next.analysisKey,inspectProject(root,config));break;
@@ -149,14 +150,16 @@ export async function workflowStep(root,opts={}){
         case 'rehearse':await rehearseScene(root,config,config.scenes.find(s=>s.id===next.sceneId),opts);break;
         default:throw Error('Unsupported workflow task');
       }
-      const current=getProject(root).config;
+      current=getProject(root).config;
       if(sha(current)!==sha(config)||sourceFingerprint(root,current)!==next.sourceFingerprint)throw Error('Inputs changed during Build task');
       j.events.push({...event,status:'EXECUTED',at:now(),elapsedMs:Date.now()-start});writeJson(file,j);
-      return {status:'EXECUTED',runId:j.runId,step:event,next:observe(root,current)};
     }catch(e){
       const failure=failureDetails(e,next.kind);
       j.events.push({...event,status:'FAILED',at:now(),elapsedMs:Date.now()-start,failure});writeJson(file,j);
       return {status:'BLOCKED',code:failure.code,runId:j.runId,step:event,failure,action:'Inspect task reports and explicitly repair before proceeding'};
     }
+    // Observation failure after a durable EXECUTED event is not a second execution failure.
+    try{return {status:'EXECUTED',runId:j.runId,step:event,next:observe(root,current)};}
+    catch(e){return {status:'EXECUTED',runId:j.runId,step:event,next:{status:'BLOCKED',code:'POST_STEP_OBSERVATION_FAILED',action:'Read workflow next and inspect current state before another dispatch',failure:failureDetails(e,next.kind)}};}
   }finally{if(fd!==null)fs.closeSync(fd);fs.rmSync(lock,{force:true});}
 }

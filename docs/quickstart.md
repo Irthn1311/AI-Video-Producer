@@ -29,6 +29,9 @@ A blocked plan indicates a missing required capability; `review-required` indica
 
 ## Using your own app
 
+For an unfamiliar real app, use the separate source-linked workspace initializer in [Fresh Agent onboarding](agent-onboarding.md). It starts unplanned, never copies dashboard claims, and defaults to required declared semantic review. Follow `workflow next/step` instead of the legacy sample walkthrough.
+
+
 `node bin/avp.mjs init /your/output/project`, then edit `/your/output/project/project.json`: replace the **sample-specific** scene feature IDs, claims and Playwright assertions with checks appropriate to your app; `sourcePath` is relative to the project directory, `appUrl` must reference **your disposable local demo application**, and `scenes[]` needs valid Playwright actions. To let an agent write the storyboard, hand it `docs/agent-prompt.md` and have it follow `AGENTS.md` and relevant skills. Prefer stable `testId` or accessible `role` locators. Production app is read-only by policy and tests should use fake accounts.
 
 ## Languages and TTS

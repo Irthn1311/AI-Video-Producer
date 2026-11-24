@@ -152,3 +152,7 @@ Phiên bản v0.1 sử dụng mốc phụ đề ước lượng thay vì đồng
 [Kiến trúc](docs/architecture.md) · [Các skill](docs/skills.md) · [Bảo mật](docs/security.md) · [Ví dụ MathMate](examples/mathmate/README.md) · [Đóng góp](CONTRIBUTING.md)
 
 Mã nguồn phát hành theo [MIT License](LICENSE).
+
+## Khởi tạo dự án thật
+
+Xem [Fresh Agent onboarding](docs/agent-onboarding.md): tạo workspace tách biệt source, không sao chép claim mẫu, mặc định review và bắt buộc storyboard có provenance trước khi freeze. Kiểm thử intake đa hệ điều hành không đồng nghĩa đã nghiệm thu media hoặc Agent độc lập.

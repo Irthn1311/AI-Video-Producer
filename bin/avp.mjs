@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {initAgentWorkspace} from '../src/agent-intake.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -33,7 +34,8 @@ const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 function usage(){console.log(`AI Video Producer v0.1 (local-first, software-demo)
 Usage: avp <command> [--project DIR] [--scene ID] [options]
   doctor                     Check Node, FFmpeg/ffprobe, Playwright/Remotion
-  init [DIR]                 Copy a project configuration (no API calls)
+  init [DIR]                 Copy a sample configuration (no API calls)
+  init DIR --source PATH --app-url URL --goal TEXT --audience TEXT [--mode review|autonomous] [--voice off|local] [--language vi|en]  Create a separate unplanned real-app workspace
   inspect                    Inventory source paths without LLM
   analyze                    Discover static stack/routes/capability clues (NOT runtime-verified)
   skills recommend           Match project-specific needs to bundled tools/skills locally
@@ -117,7 +119,7 @@ async function buildScene(root,config,state,scene,args){requireBuildGate(root,co
   if(config.review.mode==='review'&&config.review.eachScene!==false)throw Error(`Scene ${scene.id} ready for review. Inspect .avp/scenes/${scene.id}/preview.mp4 then approve --stage scene --scene ${scene.id}`);
   return results;
 }
-async function main(){const args=parseArgs(process.argv.slice(2));const command=args._[0]||'help';if(['help','--help','-h'].includes(command)){usage();return;}if(command==='doctor'){process.exitCode=doctor();return;}if(command==='init'){init(args._[1]||args.project);return;}const {root,config}=getProject(args.project||'.');const state=loadState(root);
+async function main(){const args=parseArgs(process.argv.slice(2));const command=args._[0]||'help';if(['help','--help','-h'].includes(command)){usage();return;}if(command==='doctor'){process.exitCode=doctor();return;}if(command==='init'){if(args.source!==undefined){console.log(JSON.stringify(initAgentWorkspace(args._[1]||args.project,args,path.join(ROOT,'templates','project.json')),null,2));}else init(args._[1]||args.project);return;}const {root,config}=getProject(args.project||'.');const state=loadState(root);
   switch(command){
     case 'inspect':console.log(JSON.stringify(inspect(root,config),null,2));break;
     case 'analyze':console.log(JSON.stringify(inspectProject(root,config),null,2));break;

@@ -42,6 +42,8 @@ flowchart LR
 
 ## Current preview workflow
 
+For a new application, start with [fresh Agent onboarding](docs/agent-onboarding.md): separate source and output workspace, explicit user intent, no sample claims, and a source-linked storyboard required before freeze.
+
 Use [the unified workflow](docs/workflow.md) for bounded Build/Production dispatch, [managed app lifecycle](docs/app-runtime.md) for explicitly reviewed disposable Node fixtures, [production quality](docs/production-quality.md) for opt-in audio/caption/evidence QA, and [targeted repair](docs/targeted-repair.md) for hash-bound scene edits and archived releases. `review.semantic: "required"` optionally enforces a declared external review; it is not an LLM evaluator. [Benchmark protocol](docs/benchmark.md) separates actual local observations from unmeasured external effort. This is a preview: independent unknown-repo benchmarks, real MathMate parity and independent shot-level rendering remain open.
 
 ## Features

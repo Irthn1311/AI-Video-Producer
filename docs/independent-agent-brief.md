@@ -12,3 +12,7 @@ After the first accepted final, operator identifies one actual scene defect or a
 - Build and Production journals, artifact/QA and release hashes, full/repair receipts, independently reviewed actual video/audio and scorecard.
 - Review visible claim truth, clear framing, understandable pacing, pronunciation, subtitle synchronization, narrative coherence, transition quality, and whether repair preserved unaffected media. Mark PASS/FAIL/NOT_EVALUATED with timestamps and reasons; do not treat technical QA as semantic PASS.
 - Record failures and blocked runs as evidence. No independent-agent, voice, or stable-release acceptance until actual observations are retained.
+
+## Operator handoff
+
+Use the source-linked initializer in [agent-onboarding.md](agent-onboarding.md). Start a genuinely fresh Agent session (Codex, Claude Code or Gemini CLI) on the chosen app and approved AVP revision. Supply only the task and authorized runtime, not `benchmarks/` recipes, source-derived pilot answers or historical outputs. Select a new app not inspected by the pilot author. If the Agent lacks runtime permissions or natural speech input, record the blocker and stop; do not substitute synthetic acceptance. The MathMate upstream preflight is a known-app test and is excluded from independent-agent scoring.

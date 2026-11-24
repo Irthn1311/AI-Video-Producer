@@ -291,6 +291,8 @@
 
 > **PR39 verified; cue repair candidate (CI pending):** Linux/Windows/macOS intake PASS. New advisory bounded pause-advance planner and real sync-repair variant with measured before/after, separate filter/cleanup repairs, unchanged audio/caption hashes and no threshold relaxation. Natural speech/independent agent still pending.
 
+> **PR40 verified; MathMate runtime preflight candidate (CI pending):** 5/5 declared cue anchors within tolerance after real scoped repairs. Pinned actual upstream live-ink E2E with disposable loopback PostgreSQL/Next/FastAPI and sanitized evidence; QR pairing, AVP multi-context capture, real OCR/feedback and natural speech not yet verified.
+
 - [ ] `E2-01` Tạo **MathMate Parity Benchmark**: canvas handwriting, desktop/mobile pairing, real OCR/feedback assertions, Remotion timing/inset, voice/captions, final QA — dùng dữ liệu test an toàn, tránh gọi API trả phí ở CI mặc định.
 - [ ] `E2-02` **Unknown App Benchmark**: ít nhất hai app khác MathMate, thuộc hai domain, có feature inventory, skill/tool selection, storyboard, real capture, final video, repair.
 - [ ] `E2-03` Benchmark Interactive và Autonomous, bao gồm thiếu skill, app thực sự lỗi, provider outage, corrupt artifact, stale source, failed approval.

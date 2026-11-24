@@ -39,6 +39,10 @@ Ghép và xuất MP4
 | **Rendering** | FFmpeg; tùy chọn backend Remotion |
 | **QA** | Kiểm tra kỹ thuật và lưu bằng chứng theo cảnh |
 
+## BUILD → PRODUCTION: chuẩn bị đủ trước khi quay
+
+Project mới tạo bằng `avp init` yêu cầu giai đoạn BUILD: `avp build prepare` tạo các artifact và kế hoạch; `avp build rehearse --scene ID --allow-actions` chạy thử thao tác Playwright thực tế **không quay video**; `avp build freeze --confirm` chốt production plan đã được xem xét. Thiếu công cụ, lỗi assertion, thay source/plan sẽ chặn Production. Project cũ vẫn tương thích cho tới khi chủ động bật BUILD. **Chưa tự tìm skill ngoài Internet hoặc tự thiết kế sáng tạo hoàn toàn.** [Hướng dẫn](docs/build-production.md).
+
 ## Snapshot và rollback từng cảnh
 
 Dùng `avp snapshot --scene ID` để lưu phiên bản media cục bộ, `avp versions` để xem lịch sử và `avp restore --scene ID --version v0001 --confirm` để khôi phục cảnh đã unlock. AVP xác minh hash của file, tự sao lưu phiên bản trước khi khôi phục và **luôn yêu cầu QA/duyệt lại sau rollback**. Không gọi lại Gemini hoặc Playwright chỉ để lấy lại phiên bản cũ. [Hướng dẫn](docs/scene-versions.md).

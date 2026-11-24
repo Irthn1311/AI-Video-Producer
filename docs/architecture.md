@@ -1,5 +1,11 @@
 # Architecture: agent-first, local-first and scene-first
 
+## Two-phase BUILD/PRODUCTION handoff (first vertical slice)
+
+`src/build.mjs` compiles `project.json`, source inventory, configured feature candidates, bundled capability/tool snapshots, creative brief, approved planning data, and scene capture recipes into `.avp/build/production-plan.json`. `src/rehearsal.mjs` executes the **same** Playwright action runner as real capture (`src/capture-actions.mjs`) without recording video; rehearsal proof must remain distinct from the subsequent scene capture evidence. A source/config/planning/tool/rehearsal hash-bound `build-lock.json` is required for CLI production in Build-enabled projects. User review and `avp build freeze --confirm` are explicit. Legacy projects are not silently migrated.
+
+This is a deterministic Build Gate, **not** autonomous repo comprehension, third-party skill discovery, project adapter implementation, intelligent creative direction or a self-healing Production Orchestrator. Those remain on the [Master Checklist](MASTER_UPGRADE_CHECKLIST.md). See [Build and Production](build-production.md).
+
 ## Revision snapshots and safe rollback
 
 `src/revisions.mjs` provides local SHA-256 manifests, snapshot/list/restore for a scene's media and evidence, plus a pre-restore backup. Restore invalidates QA/approval and the final render state, and preserves original artifact input fingerprints so the existing cache rules can reject stale media after config/source changes. Snapshots are explicit and local; no automatic snapshot retention/pruning/cloud sync exists yet. Read [Scene Versions](scene-versions.md).

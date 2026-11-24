@@ -55,6 +55,10 @@ flowchart LR
 
 The first module is **`software-demo`**. The architecture leaves room for future explainer and marketing-video modules. AVP v0.1 is an extensible toolkit, **not a hosted or fully autonomous video service**.
 
+## BUILD → PRODUCTION (verified preparation)
+
+Newly initialized projects require an explicit pre-production BUILD phase. `avp build prepare` compiles a versioned Build Package, `avp build rehearse --scene ID --allow-actions` tests real browser interactions **without recording**, and `avp build freeze --confirm` freezes the reviewed Production Plan and gates capture/render. Missing tools, broken assertions or source/plan drift return `BLOCKED`. Existing legacy projects remain compatible until they opt in. This **does not** yet perform external skill discovery or autonomous creative direction. [Two-phase guide](docs/build-production.md).
+
 ## Local scene snapshots and rollback
 
 Save a local revision with `avp snapshot --scene ID`, list versions with `avp versions`, and restore an unlocked scene using `avp restore --scene ID --version v0001 --confirm`. The restore verifies SHA-256 media checksums, saves a pre-restore backup and **never revives QA, review or publishing approval automatically**. [Guide](docs/scene-versions.md).

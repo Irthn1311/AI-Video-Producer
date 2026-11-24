@@ -43,6 +43,7 @@ test('default strict demo captures two real browser scenes, binds claims, and re
     await waitForServer('http://127.0.0.1:'+port);
     const config=readJson(path.join(repo,'examples','sample-project','project.json'));
     assert.equal(config.verification.mode,'claims');
+    config.workflow={requireBuild:true};
     config.sourcePath=path.join(repo,'examples','sample-app');
     config.appUrl='http://127.0.0.1:'+port;
     config.voiceover.enabled=false;
@@ -52,6 +53,26 @@ test('default strict demo captures two real browser scenes, binds claims, and re
     execute(root,'plan');
     execute(root,'approve','--stage','coverage');
     execute(root,'approve','--stage','storyboard');
+    const prepared=JSON.parse(execute(root,'build','prepare'));
+    assert.equal(prepared.status,'PENDING_GATE');
+    // Real BUILD rehearsals execute the same Playwright action runner without
+    // recording video or silently claiming that production proof already exists.
+    const blocked=spawnSync(process.execPath,[path.join(repo,'bin','avp.mjs'),
+      'capture','--scene',config.scenes[0].id,'--project',root],{encoding:'utf8',timeout:10000});
+    assert.notEqual(blocked.status,0);
+    assert.match(blocked.stderr,/BUILD GATE BLOCKED/);
+    for(const scene of config.scenes){
+      const proof=JSON.parse(execute(root,'build','rehearse','--scene',scene.id,'--allow-actions'));
+      assert.equal(proof.status,'PASS');
+      assert.equal(proof.scope,'BUILD_REHEARSAL_ONLY');
+    }
+    const check=spawnSync(process.execPath,[path.join(repo,'bin','avp.mjs'),'build','check','--project',root],
+      {encoding:'utf8',timeout:20000});
+    assert.equal(check.status,2,check.stderr);
+    assert.equal(JSON.parse(check.stdout).status,'REVIEW_REQUIRED');
+    const frozen=JSON.parse(execute(root,'build','freeze','--confirm'));
+    assert.equal(frozen.status,'READY');
+    assert.equal(frozen.sceneCount,2);
     for(const scene of config.scenes){
       const output=JSON.parse(execute(root,'capture','--scene',scene.id));
       assert.equal(output.report.status,'PASS');
@@ -66,6 +87,9 @@ test('default strict demo captures two real browser scenes, binds claims, and re
     }
     const proof=JSON.parse(execute(root,'evidence'));
     assert.equal(proof.ready,true,JSON.stringify(proof));
+    // The compiled Build plan remains locked throughout successful production.
+    const buildReport=JSON.parse(execute(root,'build','gate'));
+    assert.equal(buildReport.status,'READY');
     assert.equal(proof.scenes.filter(s=>s.status==='VERIFIED_ASSERTIONS').length,2);
     const final=JSON.parse(execute(root,'render'));
     assert.equal(final.pass,true);
@@ -78,6 +102,15 @@ test('default strict demo captures two real browser scenes, binds claims, and re
       {encoding:'utf8',timeout:10000});
     assert.notEqual(blocked.status,0);
     assert.match(blocked.stderr,/evidence|QA|stale/i);
+    // Mutating the locked production plan cannot be used for a new capture.
+    const planFile=path.join(root,'.avp','build','production-plan.json');
+    const modified=readJson(planFile);modified.scenes[0].captureRecipe.actions[0].path='/wrong';
+    writeJson(planFile,modified);
+    const denied=spawnSync(process.execPath,[path.join(repo,'bin','avp.mjs'),
+      'capture','--scene',config.scenes[0].id,'--project',root],
+      {encoding:'utf8',timeout:20000});
+    assert.notEqual(denied.status,0);
+    assert.match(denied.stderr,/BUILD GATE BLOCKED/);
   }finally{
     server.kill('SIGTERM');
     fs.rmSync(root,{recursive:true,force:true});

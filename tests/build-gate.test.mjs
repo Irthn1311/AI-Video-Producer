@@ -47,7 +47,9 @@ test('prepare generates canonical artifacts but never declares an untested repo 
       'creative-brief','storyboard','production-plan','build-report'];
     for(const n of names.slice(0,-1))assert.ok(fs.existsSync(path.join(folder,n+'.json')),n);
     const profile=readJson(path.join(folder,'project-profile.json'));
-    assert.equal(profile.analysisLevel,'STATIC_FILE_INVENTORY_ONLY');
+    assert.equal(profile.analysisLevel,'BOUNDED_STATIC_REPO_DISCOVERY');
+    assert.ok(Array.isArray(profile.detectedRoutes));
+    assert.ok(Array.isArray(profile.capabilitySignals));
     assert.equal(profile.sourceFingerprint,first.sourceFingerprint??profile.sourceFingerprint);
     const features=readJson(path.join(folder,'feature-inventory.json'));
     assert.ok(features.features.every(x=>x.status==='CANDIDATE_NOT_RUNTIME_VERIFIED'));

@@ -230,7 +230,7 @@ function checkArtifacts(root,config){
     for(const item of currentTools.tools.filter(v=>v.required&&!v.available))
       problems.push(issue('BUILD_TOOL_MISSING',item.id+' is required but unavailable','Install/authorize '+item.id+' then rebuild'));
     for(const req of currentMatching.requirements.filter(x=>x.explicitRequired&&x.status!=='BUNDLED_IMPLEMENTATION_AVAILABLE'&&
-      !currentAdapters.some(a=>a.status==='TRIAL_PASS'&&a.capabilities?.includes(x.id)))){
+      !currentAdapters.some(a=>a.status==='TRIAL_PASS'&&a.verifiedCapabilities?.includes(x.id)))){
       problems.push(issue('BUILD_REQUIRED_CAPABILITY_MISSING',req.id+' is explicitly required but only '+req.status,
         'Review/test a project-specific adapter, or revise capabilityRequirements; research candidates cannot authorize execution'));
     }
@@ -245,6 +245,9 @@ function checkArtifacts(root,config){
         if(!adapter||adapter.status!=='TRIAL_PASS')
           problems.push(issue('BUILD_ADAPTER_UNVERIFIED',capability.sceneId+': '+(adapter?.reason||'adapter trial not ready'),
             'Review current manifest, run avp adapters approve then adapters trial --allow-actions; rebuild'));
+        else if(adapter.unprovenCapabilities?.length)
+          problems.push(issue('BUILD_ADAPTER_CAPABILITY_UNPROVEN',capability.sceneId+': '+adapter.unprovenCapabilities.join(', '),
+            'Declarative actions cannot prove this capability. Build a separately reviewed/tested runtime adapter; do not bypass quality gate.'));
       }
     }
     warnings.push('Bundled capability matching only; optional external GitHub search is read-only research, never auto-installed or trusted.');

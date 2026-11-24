@@ -9,6 +9,9 @@ const MAX_ACTIONS=50;
 const allowedActions=new Set(['goto','click','fill','hover','waitFor','pause','scroll',
   'assertVisible','assertText','assertAttribute','clickExpectResponse']);
 const assertionTypes=new Set(['assertVisible','assertText','assertAttribute','clickExpectResponse']);
+// Declarative browser actions cannot prove arbitrary semantic capabilities,
+// e.g. multi-context pairing, handwriting gestures or payment settlement.
+const verifiedByV1=new Set(['data-assertions','timed-capture','app-feature-demo']);
 const actionKeys=new Set(['type','path','testId','role','name','label','text','value','timeoutMs',
   'ms','y','evidenceId','evidenceScreenshot','expectedText','attribute','expectedValue','response']);
 const responseKeys=new Set(['pathContains','method','status','bodyIncludes']);
@@ -205,9 +208,14 @@ export function adapterStatus(root,config,scene){
       return {id,status:'TRIAL_REQUIRED',reason:e.message,manifestHash:hash,
         approvalHash:approval.hash,capabilities:data.capabilities,kind:data.kind,version:data.version};
     }
+    const verifiedCapabilities=data.capabilities.filter(id=>verifiedByV1.has(id)&&(
+      id==='data-assertions'||id==='app-feature-demo'||
+      data.actions.some(x=>x.type==='waitFor'||x.type==='pause')
+    ));
+    const unprovenCapabilities=data.capabilities.filter(x=>!verifiedCapabilities.includes(x));
     return {id,status:'TRIAL_PASS',manifestHash:hash,approvalHash:approval.hash,
       reportHash:proof.reportHash,receiptHash:proof.receiptHash,
-      capabilities:data.capabilities,kind:data.kind,version:data.version,
+      capabilities:data.capabilities,verifiedCapabilities,unprovenCapabilities,kind:data.kind,version:data.version,
       permissionsHash:sha(data.permissions),
       independentlyAudited:false,hostSandboxed:false,
       runtimeScope:'LOOPBACK_BROWSER_CONTEXT_ONLY'};
@@ -218,6 +226,8 @@ export function requireAdapterReady(root,config,scene){
   const s=adapterStatus(root,config,scene);
   if(s.status!=='TRIAL_PASS')throw Error('ADAPTER GATE '+s.status+': '+s.reason+
     '. Review/approve and re-trial the current manifest before using it.');
+  if(s.unprovenCapabilities?.length)throw Error('ADAPTER GATE CAPABILITY_UNPROVEN: '+
+    s.unprovenCapabilities.join(', ')+' cannot be established by declarative browser actions');
   return s;
 }
 export function projectAdapterSnapshot(root,config){

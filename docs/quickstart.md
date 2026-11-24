@@ -8,6 +8,10 @@
 6. `node bin/avp.mjs run --project examples/sample-project` records the first scene, verifies configured UI assertions, generates captions, makes preview and QA; review mode stops. Watch `.avp/scenes/scene-01-intro/preview.mp4` and approve via `--stage scene --scene scene-01-intro`. Repeat `run` and scene approval for subsequent scenes.
 7. Run `node bin/avp.mjs evidence --project examples/sample-project` after capturing scenes: `VERIFIED_ASSERTIONS` means the configured conditions were observed against current footage, **not independent semantic validation**. Then `node bin/avp.mjs render --project examples/sample-project` exports `.avp/output/final.mp4`. Review final, then `avp approve --stage final` (publishing is your responsibility).
 
+## Project-specific skill selection
+
+After `avp analyze`, run `node bin/avp.mjs skills recommend --project <dir>`. Existing implementations are differentiated from local guidance. For unresolved needs, an opt-in `skills search --online` searches only public GitHub repository metadata; it does **not** install or execute the result. Record critical missing capabilities in `project.json.capabilityRequirements` so the Build Gate cannot claim readiness without an implementation. See [Skill Discovery](skill-discovery.md).
+
 ## BUILD first for newly initialized projects
 
 New `avp init` projects require a verified Build Package before any capture/voice/preview/render. After approving the candidate coverage and storyboard, run `avp build prepare`, `avp build rehearse --scene ID --allow-actions` for every scene on a disposable app, `avp build check`, then `avp build freeze --confirm`. The `READY` gate prevents using stale Build inputs for new video production. **The repository's legacy sample project intentionally retains the old flow for compatibility tests.** Read [BUILD → PRODUCTION](build-production.md).

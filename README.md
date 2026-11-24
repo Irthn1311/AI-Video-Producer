@@ -55,6 +55,10 @@ flowchart LR
 
 The first module is **`software-demo`**. The architecture leaves room for future explainer and marketing-video modules. AVP v0.1 is an extensible toolkit, **not a hosted or fully autonomous video service**.
 
+## Domain-specific skills and toolchain research (F-03 — PARTIAL)
+
+`avp skills recommend` maps an app's source-derived needs to existing AVP implementations and local guidance; optional `avp skills search --online` performs bounded, read-only GitHub repository research for unmet needs. Guidance and search results are **not executable capabilities**, and explicitly required unsupported skills block Build. [Skill Discovery](docs/skill-discovery.md).
+
 ## Project Intelligence — source-aware BUILD preparation
 
 `avp analyze` now inspects an unfamiliar app's **static source** for framework/dependency signals, startup candidates, route/API declarations and possible domain needs (canvas, pairing, WebSocket, charts, maps, etc.). These findings are included in the Build Package with file-based provenance, without executing the app or calling an LLM. They are **unverified clues**, not proof that a feature works. [Project Intelligence guide](docs/project-intelligence.md).

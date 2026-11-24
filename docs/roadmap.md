@@ -17,6 +17,10 @@
 - Local explicit scene snapshots and restore are implemented; automatic capture-stage checkpoints, retention pruning and fully transactional rollback remain open. Capture hashes include source content, app URL and viewport to detect changes inside the configured source scope; runtime/browser changes outside that scope still require explicit review. Scene locks protect the current approved artifacts.
 - Automatic agent self-healing and robust true-cost accounting are future milestones.
 
+## F-03 Domain-aware skill/tool discovery — PARTIAL
+
+`src/skill-discovery.mjs` matches source-derived capability needs to a curated local implementation/guidance registry; opt-in `skills search --online` searches GitHub repository metadata only for unresolved capabilities with a source/version keyed 24-hour cache. Explicit `capabilityRequirements` in `project.json` turn unimplemented abilities into Build blockers. The Build profile and toolchain lock record the trusted registry and local hashes. **External repositories remain unreviewed/unpinned/unexecuted research**, not production-ready skills. Source runtime triage, trust approvals, sandbox trials and agent-driven adapter construction remain open under A2/A3.
+
 ## F-02 Project Intelligence — PARTIAL
 
 `src/project-intelligence.mjs` provides bounded local source inspection for framework/entrypoint candidates, route/API declarations, and domain capability signals; `avp analyze` exports a provenance-backed report and `build prepare` includes it in canonical Build artifacts. It does **not** run an autonomous agent, test feature behavior, execute app scripts, search skills online or rank a full business-domain feature inventory. Those capabilities are still open under A1/A2/A3.

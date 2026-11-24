@@ -9,6 +9,7 @@ import {parseArgs,getProject,writeJson,readJson,avpDir,available,sha,sceneDir,sa
 import {loadState,saveState,sceneState,approve,gate,requireUnlocked,staleParts,invalidateOutput} from '../src/state.mjs';
 import {inspect} from '../src/inspect.mjs';
 import {inspectProject} from '../src/project-intelligence.mjs';
+import {recommendSkills,searchExternalSkills} from '../src/skill-discovery.mjs';
 import {capture,voice,captions,preview,qaScene,render,probe} from '../src/media.mjs';
 import {snapshotScene,restoreSceneSnapshot,listSceneSnapshots} from '../src/revisions.mjs';
 import {prepareBuild,checkBuild,freezeBuild,requireBuildGate,requiresBuild} from '../src/build.mjs';
@@ -21,6 +22,9 @@ Usage: avp <command> [--project DIR] [--scene ID] [options]
   init [DIR]                 Copy a project configuration (no API calls)
   inspect                    Inventory source paths without LLM
   analyze                    Discover static stack/routes/capability clues (NOT runtime-verified)
+  skills recommend           Match project-specific needs to bundled tools/skills locally
+  skills search --online     Search public GitHub repo candidates for unmet needs (read-only, no installation)
+    [--refresh]             Refresh one-day cached metadata results (sends predefined queries only)
   route --task TASK           Quality-first capability plan and quota preflight (no tool calls)
     --risk high --complexity complex --available id1,id2
     --profile economy|balanced|quality (override project profile)
@@ -82,6 +86,18 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
   switch(command){
     case 'inspect':console.log(JSON.stringify(inspect(root,config),null,2));break;
     case 'analyze':console.log(JSON.stringify(inspectProject(root,config),null,2));break;
+    case 'skills':{
+      const op=args._[1]||'recommend';
+      if(op==='recommend'){
+        console.log(JSON.stringify(recommendSkills(root,config),null,2));break;
+      }
+      if(op==='search'){
+        console.log(JSON.stringify(await searchExternalSkills(root,config,{
+          online:args.online===true,refresh:args.refresh===true
+        }),null,2));break;
+      }
+      throw Error('Use skills recommend or skills search --online [--refresh]');
+    }
     case 'evidence':console.log(JSON.stringify(inspectEvidence(root,config,state,{isCaptureStale:scene=>staleParts(scene,config,sceneState(state,scene.id),root).capture}),null,2));break;
     case 'build':{
       const op=args._[1]||'check';

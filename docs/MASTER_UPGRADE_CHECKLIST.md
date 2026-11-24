@@ -150,6 +150,8 @@
 
 ## B1. Production Orchestrator & Scene Execution — P1
 
+> **F-05d (PARTIAL; CI pending):** unified `workflow next|step` derives Build/Production task from canonical gate, current source/config, cached bounded analysis and skills, runtime/adapter status and rehearsal proofs; task hash, explicit authorization/review/agent handoffs, risk-prioritized pending rehearsal, bounded local Build journal/attempts/observed duration, delegates frozen Production to existing executor. No LLM execution, automatic skill installation, automatic approvals, semantic reasoning, global lock or hard wall-clock kill. See `docs/workflow.md`.
+
 > **F-05c (PARTIAL; CI pending):** opt-in reviewed Node entrypoint/source/runtime hash, explicit launch authorization, loopback readiness, fresh direct child per operation, bounded cleanup, local session lock/report, Build gate and capture/rehearsal fingerprint. Operator-declared disposable fixture only, not OS sandbox, dependency installation, general runtime launch, process-tree isolation, database reset, auth provisioning or guaranteed crash cleanup. See `docs/app-runtime.md`.
 
 > **F-05b (PARTIAL; pending CI):** typed capture/assertion/navigation, provider HTTP/network/auth/budget, media-tool, QA and Build drift failures with bounded journal metadata; recovery disposition and `production diagnose`; same-revision retry forbidden for Build/QA blockers, capture and interrupted retry requires explicit reset confirmation. Required production evidence checked before downstream execution. No automatic DOM repair, reset implementation, paid retry loop, general root-cause inference or global timeout.

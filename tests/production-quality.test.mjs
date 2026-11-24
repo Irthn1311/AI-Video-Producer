@@ -6,6 +6,7 @@ import path from 'node:path';
 import {qualityPolicy,captionReadability} from '../src/quality-policy.mjs';
 import {markerTimeline,evidenceTimeline,masterVoice} from '../src/production-quality.mjs';
 import {run,fileHash,sceneDir,readJson} from '../src/utils.mjs';
+import {inputHashes} from '../src/state.mjs';
 test('quality policy is opt-in and readable Unicode cues must match script',()=>{
   assert.equal(qualityPolicy({}),null);assert.throws(()=>qualityPolicy({productionQuality:{targetLufs:0}}));
   const p=qualityPolicy({productionQuality:{}});
@@ -43,4 +44,13 @@ test('speed changes are permitted only within a recorded explicit pause interior
   const plan={shots:[shot(0,12),shot(12,24,2),shot(60,36)]};
   assert.equal(evidenceTimeline(scene,markers,plan,3,4,24).pass,true);
   assert.equal(evidenceTimeline(scene,markers,{shots:[shot(0,24,2),shot(48,48)]},3,4,24).pass,false);
+});
+
+test('duration-only repair invalidates silent-scene captions but preserves voiced narration inputs',()=>{
+  const config={voiceover:{enabled:false},render:{fps:30}},scene={id:'s',durationSec:4,narration:'Example.',capture:{actions:[]}};
+  const a=inputHashes(scene,config),b=inputHashes({...scene,durationSec:6},config);
+  assert.notEqual(a.captions,b.captions);assert.notEqual(a.capture,b.capture);assert.notEqual(a.preview,b.preview);
+  config.voiceover.enabled=true;
+  const x=inputHashes(scene,config),y=inputHashes({...scene,durationSec:6},config);
+  assert.equal(x.voice,y.voice);assert.equal(x.captions,y.captions);assert.notEqual(x.preview,y.preview);
 });

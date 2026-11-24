@@ -34,6 +34,8 @@ function evaluate(root,config,state){
     sha(previous.scenes.filter(s=>s.id!==scene.id))!==sha(fresh.scenes.filter(s=>s.id!==scene.id))||
     fresh.scenes.some(s=>s.dependsOn.length))throw Error('Repair must preserve unrelated feature/story metadata and independent scene state');
   const target=next.scenes.find(s=>s.id===scene.id),ss=state.scenes?.[scene.id]||{artifacts:{}};
+  const shotChange=d.shotChanges[scene.id];
+  if(q.shotId&&q.cause==='composition'&&(!shotChange||!shotChange.changed.includes(q.shotId)))throw Error('Requested composition shot is not changed by proposal');
   const stale=staleParts(scene,config,ss,root),before=inputHashes(scene,config,ss,root),after=inputHashes(target,next,ss,root);
   const rebuild={};
   rebuild.capture=stale.capture||before.capture!==after.capture;
@@ -58,7 +60,7 @@ function evaluate(root,config,state){
     nodes,otherScenes:others,claimChanged,shotChanges:d.shotChanges[scene.id]||null,
     captureScope:rebuild.capture?'FULL_TARGET_SCENE':'NONE',compositionScope:'TARGET_SCENE_ONLY',
     durationBeforeSec:d.durationBeforeSec,durationAfterSec:d.durationAfterSec,
-    stateHash:sha(state),paidVoiceMayBeNeeded:rebuild.voice&&!selectedVoiceFingerprint(root,next,target),
+    stateHash:sha(state),paidVoiceMayBeNeeded:rebuild.voice&&!/^[a-f0-9]{64}$/.test(selectedVoiceFingerprint(root,next,target)||''),
     estimatedActualCostUsd:null,requiresBuild:true,requiresExplicitApproval:true};
   return {plan:{...plan,planHash:sha(plan)},next};
 }

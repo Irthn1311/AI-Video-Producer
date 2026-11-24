@@ -184,6 +184,8 @@ async function exercise(kind){
     writeJson(proposalFile,revision);
     writeJson(path.join(root,'.avp','repair','request.json'),{schemaVersion:1,baseConfigHash:ctx.baseConfigHash,sceneId:'workflow',shotId:'result',cause:'composition',description:'Adjust zoom in result shot',rationale:'Improve focus without changing app interaction'});
     const planned=await json(root,'repair','plan');assert.deepEqual(planned.shotChanges.changed,['result']);
+    await deny(root,['repair','apply','--hash','bad','--confirm'],/Repair plan changed/);
+    assert.equal(fileHash(path.join(root,'.avp','output','final.mp4')),originalFinal);
     assert.equal(planned.captureScope,'NONE');assert.equal(planned.nodes.find(n=>n.kind==='preview').action,'REBUILD');
     assert.equal(planned.nodes.find(n=>n.kind==='voice').action,'PRESERVE');
     const applied=await json(root,'repair','apply','--hash',planned.planHash,'--confirm');assert.equal(applied.status,'APPLIED_REQUIRES_BUILD');assert.ok(applied.releaseId);assert.ok(applied.backup);

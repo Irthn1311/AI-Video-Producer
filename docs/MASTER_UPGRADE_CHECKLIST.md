@@ -273,6 +273,8 @@
 
 > **F-08/F-09 benchmark and onboarding candidate (PARTIAL; CI pending):** hash-bound local benchmark receipt for complete journaled full/repair runs, measured regeneration seconds, dispatch timing, reservation deltas, explicit fixture/external scope and matching-input comparison; optional required declared semantic review gates; updated entry guidance. CI logs fixture observations only. Independent unknown apps, real Vietnamese voice/MathMate parity, independent semantic assessment, multiple OS/agent tests and stable release remain open.
 
+> **Matched-input benchmark extension (CI pending):** existing two fixtures additionally run clean v2 full Production after the v2 repair; strict comparison binds plan, capture/voice inputs and actual voice bytes. Independent external intake pins two candidates; no execution/acceptance claimed. See `docs/external-benchmark-intake.md`.
+
 - [ ] `E2-01` Tạo **MathMate Parity Benchmark**: canvas handwriting, desktop/mobile pairing, real OCR/feedback assertions, Remotion timing/inset, voice/captions, final QA — dùng dữ liệu test an toàn, tránh gọi API trả phí ở CI mặc định.
 - [ ] `E2-02` **Unknown App Benchmark**: ít nhất hai app khác MathMate, thuộc hai domain, có feature inventory, skill/tool selection, storyboard, real capture, final video, repair.
 - [ ] `E2-03` Benchmark Interactive và Autonomous, bao gồm thiếu skill, app thực sự lỗi, provider outage, corrupt artifact, stale source, failed approval.

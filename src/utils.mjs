@@ -7,13 +7,14 @@ import {validateSceneEdit} from './editing.mjs';
 import {validateCaptureEvidenceConfig} from './capture-assertions.mjs';
 import {validateClaimConfig} from './evidence.mjs';
 import {validateCaptionTiming} from './audio-timing.mjs';
+import {ExecutionError} from './execution-errors.mjs';
 
 export const readJson=(file)=>JSON.parse(fs.readFileSync(file,'utf8'));
 export function writeJson(file,data){fs.mkdirSync(path.dirname(file),{recursive:true});const temp=`${file}.${process.pid}.tmp`;fs.writeFileSync(temp,JSON.stringify(data,null,2)+'\n');fs.renameSync(temp,file);}
 export function sha(value){return crypto.createHash('sha256').update(typeof value==='string'?value:JSON.stringify(value)).digest('hex');}
 export const fileHash=(file)=>sha(fs.readFileSync(file).toString('base64'));
 export const safeName=(value)=>{if(!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(value))throw Error(`Invalid ID: ${value}`);return value;};
-export function run(command,args=[],options={}){const p=spawnSync(command,args,{encoding:'utf8',maxBuffer:5*1024*1024,...options});if(p.error)throw Error(`${command} is unavailable: ${p.error.message}`);if(p.status!==0)throw Error(`${command} failed (${p.status}): ${(p.stderr||p.stdout||'').slice(-1600)}`);return p.stdout||'';}
+export function run(command,args=[],options={}){const p=spawnSync(command,args,{encoding:'utf8',maxBuffer:5*1024*1024,...options});if(p.error)throw new ExecutionError(p.error.code==='ENOENT'?'TOOL_UNAVAILABLE':'MEDIA_TOOL_FAILED',`${command} is unavailable: ${p.error.message}`,{tool:command});if(p.status!==0)throw new ExecutionError('MEDIA_TOOL_FAILED',`${command} failed (${p.status}): ${(p.stderr||p.stdout||'').slice(-1600)}`,{tool:command});return p.stdout||'';}
 export function available(command){const p=spawnSync(command,['-version'],{encoding:'utf8',timeout:6000});return !p.error && p.status===0? (p.stdout||p.stderr||'').split('\n')[0]:null;}
 export function loadEnv(root){const file=path.join(root,'.env');if(!fs.existsSync(file))return;for(const l of fs.readFileSync(file,'utf8').split(/\r?\n/)){let x=l.trim();if(!x||x.startsWith('#'))continue;const m=x.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/i);if(m&&!process.env[m[1]])process.env[m[1]]=m[2].replace(/^['"]|['"]$/g,'');}}
 export const isWithin=(base,target)=>{const rel=path.relative(path.resolve(base),path.resolve(target));return rel===''||(!rel.startsWith('..'+path.sep)&&rel!=='..'&&!path.isAbsolute(rel));};

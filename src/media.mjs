@@ -10,17 +10,18 @@ import {verificationMode,verifySceneClaims,requireCoveragePlan} from './evidence
 import {sentenceParts,measureSpeech,alignNarration,validateCaptionRows} from './audio-timing.mjs';
 import {loadVoiceEnvironment,synthesizeVoice} from './voice-provider.mjs';
 import {timingEnabled,selectedVoice} from './voice-selection.mjs';
+import {ExecutionError,failureDetails} from './execution-errors.mjs';
 const seconds=(value)=>Number(value||0);
 export function probe(file){return JSON.parse(run('ffprobe',['-v','error','-show_format','-show_streams','-of','json',file]));}
 export function mediaSeconds(file){return seconds(probe(file).format?.duration);}
 export {locator} from './capture-actions.mjs';
 export async function capture(root,config,scene,state,opts={}){
-  const adapterProof=requireAdapterReady(root,config,scene);
+  let adapterProof;try{adapterProof=requireAdapterReady(root,config,scene);}catch(e){throw new ExecutionError('ADAPTER_OR_POLICY_BLOCKED',e.message);}
   const effectiveActions=adapterActions(root,config,scene);
   const ss=sceneState(state,scene.id);requireUnlocked(state,scene.id);const parts=staleParts(scene,config,ss,root);if(!parts.capture&&!opts.force)return {reused:true,file:path.join(sceneDir(root,scene.id),'capture.mp4')};
-  let chromium;try{({chromium}=await import('@playwright/test'));}catch{throw Error('Playwright not installed. Run npm install, then npx playwright install chromium.');}
+  let chromium;try{({chromium}=await import('@playwright/test'));}catch{throw new ExecutionError('TOOL_UNAVAILABLE','Playwright not installed. Run npm install, then npx playwright install chromium.');}
   const dir=sceneDir(root,scene.id);fs.mkdirSync(dir,{recursive:true});const raw=path.join(dir,'raw');fs.mkdirSync(raw,{recursive:true});
-  const browser=await chromium.launch({headless:true});let ctx;const report={scene:scene.id,actions:[],assertions:[],status:'IN_PROGRESS',startedAt:new Date().toISOString(),
+  let browser;try{browser=await chromium.launch({headless:true});}catch(e){throw new ExecutionError('TOOL_UNAVAILABLE',e.message);}let ctx;const report={scene:scene.id,actions:[],assertions:[],status:'IN_PROGRESS',startedAt:new Date().toISOString(),
     adapter:adapterProof?{id:adapterProof.id,manifestHash:adapterProof.manifestHash,receiptHash:adapterProof.receiptHash}:null};
   try{ctx=await browser.newContext({...(adapterProof?{acceptDownloads:false,serviceWorkers:'block',permissions:[]}:{}),viewport:{width:config.render?.width||1920,height:config.render?.height||1080},recordVideo:{dir:raw,size:{width:config.render?.width||1920,height:config.render?.height||1080}}});await protectAdapterBrowser(ctx,config,scene);const page=await ctx.newPage();const pageErrors=[];report.pageErrors=pageErrors;page.on('pageerror',err=>pageErrors.push(err.message.slice(0,500)));const start=Date.now();
     for(const a of effectiveActions){const startAction=Date.now();
@@ -28,16 +29,16 @@ export async function capture(root,config,scene,state,opts={}){
       report.actions.push({type:a.type,ms:Date.now()-startAction});}
     let remaining=scene.durationSec*1000-(Date.now()-start);if(remaining>0)await page.waitForTimeout(remaining);
     report.finalUrl=page.url();report.pageErrors=pageErrors;report.elapsedMs=Date.now()-start;
-    if(scene.capture.evidencePolicy?.requireAssertions&&report.assertions.length===0)throw Error('Missing required browser assertions');
+    if(scene.capture.evidencePolicy?.requireAssertions&&report.assertions.length===0)throw new ExecutionError('CAPTURE_EVIDENCE_INVALID','Missing required browser assertions');
     if(scene.capture.evidencePolicy?.failOnPageError!==false&&scene.capture.evidencePolicy?.requireAssertions&&pageErrors.length)
-      throw Error('Browser emitted '+pageErrors.length+' uncaught page error(s); evidence rejected');
+      throw new ExecutionError('APP_PAGE_ERROR','Browser emitted '+pageErrors.length+' uncaught page error(s); evidence rejected');
     const video=page.video();await ctx.close();ctx=null;const rawPath=await video.path();
     const output=path.join(dir,'capture.mp4');const tmp=path.join(dir,'capture.new.mp4');run('ffmpeg',['-y','-v','error','-i',rawPath,'-vf',`fps=${config.render?.fps||30},scale=${config.render?.width||1920}:${config.render?.height||1080}:force_original_aspect_ratio=decrease,pad=${config.render?.width||1920}:${config.render?.height||1080}:(ow-iw)/2:(oh-ih)/2`,'-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p','-an',tmp]);fs.renameSync(tmp,output);
     const h=inputHashes(scene,config,sceneState(state,scene.id),root);recordArtifact(root,state,scene,'capture',output,h.capture);
     const currentCapture=sceneState(state,scene.id).artifacts.capture;
     report.captureHash=currentCapture.hash;report.captureInputHash=currentCapture.inputHash;
     report.outputDuration=mediaSeconds(output);report.status='PASS';writeJson(path.join(dir,'capture-report.json'),report);return {file:output,report};
-   }catch(e){report.status='FAIL';report.error=String(e.message).slice(0,750);
+   }catch(e){report.status='FAIL';report.failure=failureDetails(e,'capture');report.error=String(e.message).slice(0,750);
     // Keep a local failure screenshot; do not copy private page text or network bodies into reports.
     try{if(ctx){const pages=ctx.pages();if(pages.length){const file=path.join(dir,'capture-failure.png');await pages[0].screenshot({path:file,timeout:6000});report.failureScreenshot='capture-failure.png';}}}catch{}
     writeJson(path.join(dir,'capture-report.json'),report);throw e;}finally{if(ctx)await ctx.close();await browser.close();}
@@ -50,8 +51,8 @@ export async function voice(root,config,scene,state,opts={}){
   if(!staleParts(scene,config,ss,root).voice&&!opts.force)return {reused:true};
   const out=path.join(sceneDir(root,scene.id),'voice.wav');
   if(timingEnabled(config)){
-    const chosen=selectedVoice(root,config,scene);
-    if(!chosen)throw Error('Selected Build narration is missing; run timing select before Production');
+    let chosen;try{chosen=selectedVoice(root,config,scene);}catch(e){throw new ExecutionError('AUDIO_SELECTION_INVALID',e.message);}
+    if(!chosen)throw new ExecutionError('AUDIO_SELECTION_INVALID','Selected Build narration is missing; run timing select before Production');
     atomicWrite(out,fs.readFileSync(chosen.audio));
     recordArtifact(root,state,scene,'voice',out,h.voice);
     writeJson(path.join(sceneDir(root,scene.id),'voice-report.json'),{provider:chosen.receipt.origin,
@@ -156,7 +157,7 @@ function finalReport(root,config,state,engine,file){
   run('ffmpeg',['-v','error','-i',file,'-f','null','-']);
   const checks={videoH264:v?.codec_name==='h264',audioAAC:a?.codec_name==='aac',width:v?.width===(config.render?.width||1920),height:v?.height===(config.render?.height||1080),duration:Math.abs(actual-target)<1,fullDecode:true};
   const report={schemaVersion:2,engine,file,durationSec:actual,scenes:config.scenes.length,checks,pass:Object.values(checks).every(Boolean),outputHash:fileHash(file),humanFinalApproval:false};
-  if(!report.pass)throw Error('Final render failed technical QA');
+  if(!report.pass)throw new ExecutionError('FINAL_QA_FAILED','Final render failed technical QA',{failedChecks:Object.keys(checks).filter(k=>!checks[k])});
   const qa=path.join(avpDir(root),'output','final-qa.json');writeJson(qa,report);
   invalidateOutput(state);
   state.output={file,createdAt:new Date().toISOString(),hash:report.outputHash,qaHash:fileHash(qa),inputHash:finalInputHash(config,state)};

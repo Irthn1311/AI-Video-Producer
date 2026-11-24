@@ -8,6 +8,7 @@ import {avpDir,readJson,writeJson,sha,fileHash,sceneDir} from './utils.mjs';
 import {sourceFingerprint} from './inspect.mjs';
 import {adapterFingerprint} from './adapters.mjs';
 import {selectedVoiceFingerprint} from './voice-selection.mjs';
+import {ExecutionError} from './execution-errors.mjs';
 
 const stamp=()=>new Date().toISOString();
 const planPath=(root,stage)=>path.join(avpDir(root),'planning',stage==='coverage'?'feature-coverage.json':'storyboard.json');
@@ -160,13 +161,13 @@ export function gate(state,config,stage,root){
 export function reservePaidCall(root,state,config,session,estimatedUsd){
   const maxCalls=config.voiceover?.maxApiCallsPerRun;
   const limit=config.budget?.maxEstimatedUsd;
-  if(!Number.isInteger(maxCalls)||maxCalls<1)throw Error('voiceover.maxApiCallsPerRun must be a positive integer');
-  if(!Number.isFinite(limit)||limit<=0)throw Error('budget.maxEstimatedUsd must be positive before paid API calls');
-  if(!Number.isFinite(estimatedUsd)||estimatedUsd<=0)throw Error('Set voiceover.estimatedUsdPerCall to a positive cost estimate (USD) before paid calls');
-  if(!session||!Number.isInteger(session.calls))throw Error('Paid API run session missing');
-  if(session.calls>=maxCalls)throw Error(`Paid API per-run call limit reached (${maxCalls})`);
+  if(!Number.isInteger(maxCalls)||maxCalls<1)throw new ExecutionError('PAID_BUDGET_BLOCKED','voiceover.maxApiCallsPerRun must be a positive integer');
+  if(!Number.isFinite(limit)||limit<=0)throw new ExecutionError('PAID_BUDGET_BLOCKED','budget.maxEstimatedUsd must be positive before paid API calls');
+  if(!Number.isFinite(estimatedUsd)||estimatedUsd<=0)throw new ExecutionError('PAID_BUDGET_BLOCKED','Set voiceover.estimatedUsdPerCall to a positive cost estimate (USD) before paid calls');
+  if(!session||!Number.isInteger(session.calls))throw new ExecutionError('PAID_BUDGET_BLOCKED','Paid API run session missing');
+  if(session.calls>=maxCalls)throw new ExecutionError('PAID_BUDGET_BLOCKED',`Paid API per-run call limit reached (${maxCalls})`);
   const budget=state.budget??(state.budget={ttsCalls:0,estimatedUsdReserved:0});
-  if(budget.estimatedUsdReserved+estimatedUsd>limit+1e-9)throw Error(`Estimated paid API project budget exceeded (${limit} USD). No call made.`);
+  if(budget.estimatedUsdReserved+estimatedUsd>limit+1e-9)throw new ExecutionError('PAID_BUDGET_BLOCKED',`Estimated paid API project budget exceeded (${limit} USD). No call made.`);
   session.calls++;
   budget.ttsCalls++;
   budget.estimatedUsdReserved=Math.round((budget.estimatedUsdReserved+estimatedUsd)*1000000)/1000000;

@@ -1,6 +1,7 @@
 import path from 'node:path';
 import {executeCaptureAssertion} from './capture-assertions.mjs';
 import {executePointerPath} from './pointer-actions.mjs';
+import {ExecutionError} from './execution-errors.mjs';
 
 export function locator(page,action){
   if(action.testId)return page.getByTestId(action.testId);
@@ -12,14 +13,14 @@ export function locator(page,action){
 
 /** Shared deterministic Playwright action runner used for BUILD rehearsal and real capture. */
 export async function executeCaptureAction(page,action,{appUrl,dir,report,adapter=false}){
-  switch(action.type){
+  try{switch(action.type){
     case 'goto':{
       const url=new URL(action.path||'/',appUrl),allowed=new URL(appUrl);
-      if(url.origin!==allowed.origin)throw Error('Cross-origin navigation blocked for capture/rehearsal');
+      if(url.origin!==allowed.origin)throw new ExecutionError('ADAPTER_OR_POLICY_BLOCKED','Cross-origin navigation blocked for capture/rehearsal');
       await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:60000});break;
     }
     case 'pointerPath':
-      if(!adapter)throw Error('pointerPath requires a reviewed project adapter');
+      if(!adapter)throw new ExecutionError('ADAPTER_OR_POLICY_BLOCKED','pointerPath requires a reviewed project adapter');
       await executePointerPath(page,action,locator);break;
     case 'click':await locator(page,action).click({timeout:30000});break;
     case 'fill':await locator(page,action).fill(action.value??'');break;
@@ -41,6 +42,10 @@ export async function executeCaptureAction(page,action,{appUrl,dir,report,adapte
       }
       break;
     }
-    default:throw Error('Unsupported capture action: '+action.type);
+    default:throw new ExecutionError('ADAPTER_OR_POLICY_BLOCKED','Unsupported capture action: '+action.type);
+  }}catch(e){
+    const code=e instanceof ExecutionError?e.failureCode:action.type==='goto'?'APP_NAVIGATION_FAILED':
+      ['assertVisible','assertText','assertAttribute','clickExpectResponse'].includes(action.type)?'ASSERTION_FAILED':'LOCATOR_OR_INTERACTION_FAILED';
+    throw new ExecutionError(code,String(e.message||e),{actionType:action.type,actionIndex:report.actions.length});
   }
 }

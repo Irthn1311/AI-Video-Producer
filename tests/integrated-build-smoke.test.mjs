@@ -29,7 +29,8 @@ const fixtureAudio=(file)=>{
 async function exercise(kind){
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'avp-integrated-'+kind+'-'));
   const html=kind==='canvas'?canvasHtml:dashboardHtml;
-  const server=http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end(html);});
+  let served=html;
+  const server=http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end(served);});
   try{
     await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
     fs.mkdirSync(path.join(root,'app'));fs.writeFileSync(path.join(root,'app','index.html'),html);
@@ -50,7 +51,7 @@ async function exercise(kind){
     const heading=kind==='canvas'?'Drawing editor':'Inventory dashboard';
     const overview={id:'overview',title:heading,durationSec:4,featureIds:['overview'],
       narration:heading+'.',claims:[{id:'heading',featureId:'overview',text:heading+'.',evidenceIds:['heading']}],
-      capture:{actions:[{type:'goto',path:'/'},{type:'assertVisible',role:'heading',name:heading,evidenceId:'heading'}],
+      capture:{actions:[{type:'goto',path:'/'},{type:'assertText',role:'heading',expectedText:heading,evidenceId:'heading'}],
         evidencePolicy:{requireAssertions:true,failOnPageError:true}},
       edit:{design:{rationale:'Retain context',framing:'stable',theme},shots:[{id:'context',durationSec:4,camera:'static',purpose:'Show actual heading'}]}};
     const resultText=kind==='canvas'?'A drawn stroke.':'In-stock items.';
@@ -105,6 +106,15 @@ async function exercise(kind){
     assert.equal((await json(root,'build','freeze','--confirm')).status,'READY');
     const next=await json(root,'production','next');assert.equal(next.kind,'capture');
     await assert.rejects(cli(root,'production','step'),e=>JSON.parse(e.stdout).code==='ACTION_AUTHORIZATION_REQUIRED');
+    if(kind==='dashboard'){
+      served=html.replace('Inventory dashboard','Incorrect heading');
+      await assert.rejects(cli(root,'production','step','--allow-actions'),e=>JSON.parse(e.stdout).code==='ASSERTION_FAILED');
+      await assert.rejects(cli(root,'production','diagnose'),e=>{const d=JSON.parse(e.stdout);return d.failure.code==='ASSERTION_FAILED'&&d.failure.metadata.actionIndex===1&&d.failure.retrySameRevision===false;});
+      await assert.rejects(cli(root,'production','step','--allow-actions','--retry-failed','--confirm-reset'),e=>JSON.parse(e.stdout).code==='RECOVERY_REQUIRES_REPAIR');
+      served=html;
+      assert.equal((await json(root,'build','rehearse','--scene','overview','--allow-actions')).status,'PASS');
+      assert.equal((await json(root,'build','freeze','--confirm')).status,'READY');
+    }
     const first=await json(root,'production','step','--allow-actions');
     assert.equal(first.status,'EXECUTED');assert.equal(first.step.kind,'capture');assert.equal(first.next.kind,'voice');
     const second=await json(root,'production','step');assert.equal(second.status,'EXECUTED');assert.equal(second.runId,first.runId);assert.equal(second.step.kind,'voice');

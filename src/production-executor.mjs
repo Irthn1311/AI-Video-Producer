@@ -7,6 +7,9 @@ import {loadState,sceneState,staleParts,validateSceneQa,sceneApprovalValid,valid
 import {checkBuild,requiresBuild,buildDir} from './build.mjs';
 import {capture,voice,captions,preview,qaScene,render} from './media.mjs';
 import {timingEnabled} from './voice-selection.mjs';
+import {ExecutionError,failureDetails,interruptedFailure} from './execution-errors.mjs';
+import {verificationMode,verifySceneClaims} from './evidence.mjs';
+import {captureEvidencePassed} from './capture-assertions.mjs';
 
 const dir=root=>path.join(avpDir(root),'production');
 const mutex=root=>path.join(dir(root),'executor.lock');
@@ -39,6 +42,13 @@ function nextMedia(root,config,state){
       continue;
     }
     if(stale.capture)return step('capture',s.id,'playwright-runtime','allow-actions');
+    if(s.capture.evidencePolicy?.requireAssertions){
+      try{
+        const artifact=ss.artifacts.capture,proof=readJson(path.join(avpDir(root),'scenes',s.id,'capture-report.json'));
+        if(proof.scene!==s.id||proof.captureHash!==artifact.hash||proof.captureInputHash!==artifact.inputHash||!captureEvidencePassed(proof,s.capture.evidencePolicy))throw Error('Invalid proof');
+        if(verificationMode(config)==='claims')verifySceneClaims(root,config,s,state);
+      }catch{return stop('BLOCKED','CAPTURE_EVIDENCE_INVALID','Repair current capture and matching evidence before continuing',{sceneId:s.id});}
+    }
     if(stale.voice)return step('voice',s.id,timingEnabled(config)?'selected-local-audio':'gemini-tts',timingEnabled(config)?null:'allow-paid-api');
     if(stale.captions)return step('captions',s.id,'bundled-caption-timing');
     if(stale.preview)return step('preview',s.id,s.edit?'remotion-render':'ffmpeg-render');
@@ -63,6 +73,7 @@ function readJournal(root,rev){
   return j;
 }
 function pendingEvent(j){const e=j?.events.at(-1);return e&&['RUNNING','FAILED'].includes(e.status)?e:null;}
+function pendingFailure(pending){return pending?.status==='RUNNING'?interruptedFailure():pending?.failure||failureDetails(new Error('Unclassified prior failure'),pending?.kind);}
 function retryLimit(config){
   const n=config.budget?.maxRetryPerScene??0;
   if(!Number.isInteger(n)||n<0||n>20)throw Error('budget.maxRetryPerScene must be 0–20 for production executor');
@@ -76,13 +87,21 @@ function snapshot(root,config,state){
   const next=nextMedia(root,config,state);
   const pending=pendingEvent(j);
   return {...next,...build,runId:j?.runId||null,
-    pending:pending?{status:pending.status,kind:pending.kind,sceneId:pending.sceneId,attempt:pending.attempt,code:pending.code||null}:null,
+    pending:pending?{status:pending.status,kind:pending.kind,sceneId:pending.sceneId,attempt:pending.attempt,code:pending.code||null,failure:pendingFailure(pending)}:null,
     observed:{completedSteps:j?.events.filter(e=>e.status==='EXECUTED').length||0,
       failedSteps:j?.events.filter(e=>e.status==='FAILED').length||0,
       ttsCalls:state.budget?.ttsCalls||0,estimatedUsdReserved:state.budget?.estimatedUsdReserved||0},
     scope:'FROZEN_BUILD_EXECUTION_NOT_AUTONOMOUS_SEMANTIC_REVIEW'};
 }
 export function productionNext(root,config){return snapshot(root,config,loadState(root));}
+export function productionDiagnose(root,config){
+  const current=productionNext(root,config);
+  const pending=current.pending;
+  return {status:pending?'RECOVERY_REQUIRED':current.status,revision:current.revision||null,runId:current.runId||null,
+    sceneId:pending?.sceneId||current.sceneId||null,step:pending?.kind||current.kind||null,
+    failure:pending?.failure||null,blocker:current.code||null,action:pending?.failure?.action||current.action||null,
+    observed:current.observed||null,scope:'LOCAL_DIAGNOSIS_NOT_AUTOMATED_REPAIR'};
+}
 function acquire(root){
   fs.mkdirSync(dir(root),{recursive:true});
   const file=mutex(root),token=randomUUID();
@@ -110,8 +129,8 @@ async function dispatch(root,config,state,next,opts){
     case 'voice':return voice(root,config,s,state,{allowPaidApi:opts.allowPaidApi,budgetSession:{calls:0}});
     case 'captions':return captions(root,config,s,state);
     case 'preview':return preview(root,config,s,state);
-    case 'qa':{const q=qaScene(root,config,s,state);if(q.pass!==true)throw Error('Technical scene QA failed');return q;}
-    case 'render':{const q=await render(root,config,state);if(q.pass!==true)throw Error('Final technical QA failed');return q;}
+    case 'qa':{const q=qaScene(root,config,s,state);if(q.pass!==true)throw new ExecutionError('SCENE_QA_FAILED','Technical scene QA failed',{failedChecks:Object.keys(q.checks||{}).filter(k=>!q.checks[k])});return q;}
+    case 'render':{const q=await render(root,config,state);if(q.pass!==true)throw new ExecutionError('FINAL_QA_FAILED','Final technical QA failed');return q;}
     default:throw Error('Unknown execution step');
   }
 }
@@ -123,7 +142,11 @@ export async function productionStep(root,opts={}){
     let j=readJournal(root,next.revision);
     const pending=pendingEvent(j);
     if(pending){
-      if(!opts.retryFailed)return {...next,status:'BLOCKED',code:'EXPLICIT_RECOVERY_REQUIRED',action:'Inspect the failed/interrupted step and app state before retrying with --retry-failed or revising Build'};
+      const failure=pendingFailure(pending);
+      if(!opts.retryFailed)return {...next,status:'BLOCKED',code:'EXPLICIT_RECOVERY_REQUIRED',failure,action:failure.action};
+      if(!failure.retrySameRevision)return {...next,status:'BLOCKED',code:'RECOVERY_REQUIRES_REPAIR',failure,action:failure.action};
+      if(pending.status==='RUNNING'&&!opts.confirmReset)return {...next,status:'BLOCKED',code:'INTERRUPTED_STATE_REVIEW_REQUIRED',failure,action:'Inspect artifacts and app state; use --confirm-reset only after safe reconciliation/reset'};
+      if(pending.kind==='capture'&&!opts.confirmReset)return {...next,status:'BLOCKED',code:'CAPTURE_RESET_REQUIRED',failure,action:'Inspect and safely reset the isolated app before retrying with --confirm-reset'};
       // If a step completed its artifact write before interruption, do not
       // automatically replay it; re-evaluate the next step from actual state.
       if(next.status!=='NEXT'||keyOf(next)!==pending.key){
@@ -149,16 +172,16 @@ export async function productionStep(root,opts={}){
       // Re-read persistent state and verify frozen Build again after dispatch.
       const current=getProject(root).config;
       if(sha(current)!==sha(config)||revisionFor(root,current,loadState(root)).revision!==next.revision)
-        throw Error('Build changed while step was executing; inspect artifacts before reuse');
+        throw new ExecutionError('BUILD_DRIFT','Build changed while step was executing; inspect artifacts before reuse');
       j.events.push({...event,status:'EXECUTED',at:now(),elapsedMs:Date.now()-start});
       writeJson(journalFile(root,next.revision),j);
       return {status:'EXECUTED',runId:j.runId,step:event,next:snapshot(root,current,loadState(root))};
     }catch(e){
       // No raw error text is persisted: provider/app errors may contain private data.
-      j.events.push({...event,status:'FAILED',at:now(),elapsedMs:Date.now()-start,code:'STEP_EXECUTION_FAILED'});
+      const failure=failureDetails(e,next.kind);
+      j.events.push({...event,status:'FAILED',at:now(),elapsedMs:Date.now()-start,code:failure.code,failure});
       writeJson(journalFile(root,next.revision),j);
-      return {status:'BLOCKED',code:'STEP_EXECUTION_FAILED',runId:j.runId,step:event,
-        action:'Inspect local tool reports, correct the cause and explicitly retry or return to Build'};
+      return {status:'BLOCKED',code:failure.code,runId:j.runId,step:event,failure,action:failure.action};
     }
   }finally{release();}
 }

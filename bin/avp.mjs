@@ -23,6 +23,7 @@ import {productionNext,productionStep,recoverProduction,productionDiagnose} from
 import {appStatus,approveApp,trialApp,managedApp} from '../src/app-runtime.mjs';
 import {plan} from '../src/planning.mjs';
 import {workflowNext,workflowStep} from '../src/workflow.mjs';
+import {telemetryReport} from '../src/telemetry.mjs';
 const apiSession={calls:0};
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 function usage(){console.log(`AI Video Producer v0.1 (local-first, software-demo)
@@ -71,7 +72,8 @@ Usage: avp <command> [--project DIR] [--scene ID] [options]
   asset add --scene ID --name NAME --file VIDEO  Import an authentic scene inset/shot source
   preview --scene ID         Render scene with FFmpeg or scene.edit Remotion
   qa --scene ID              Probe scene media (technical QA)
-  app status                 Inspect managed app manifest/approval/trial\n  app approve --hash HASH --confirm  Review exact local Node entrypoint/source\n  app trial --allow-launch   Start, probe readiness and clean up disposable app\n  workflow next              Observe current Build/Production and next bounded task
+  app status                 Inspect managed app manifest/approval/trial\n  app approve --hash HASH --confirm  Review exact local Node entrypoint/source\n  app trial --allow-launch   Start, probe readiness and clean up disposable app\n  telemetry                  Report observed journal durations, provider reservations and artifact reuse
+  workflow next              Observe current Build/Production and next bounded task
   workflow step --hash HASH [--allow-actions] [--allow-launch] [--allow-paid-api] [--retry-failed] [--confirm-reset]  Execute one current task
   production next            Inspect next step of frozen Build (no execution)
   production diagnose        Explain current typed failure and recovery policy
@@ -151,6 +153,7 @@ async function main(){const args=parseArgs(process.argv.slice(2));const command=
       const op=args._[1]||'status';const result=op==='status'?appStatus(root,config):op==='approve'?approveApp(root,config,{hash:args.hash,confirm:args.confirm===true}):op==='trial'?await trialApp(root,config,{allowLaunch:args['allow-launch']===true}):null;
       if(!result)throw Error('Use app status|approve|trial');console.log(JSON.stringify(result,null,2));break;
     }
+    case 'telemetry':console.log(JSON.stringify(telemetryReport(root,config,state),null,2));break;
     case 'workflow':{
       const op=args._[1]||'next';
       const result=op==='next'?workflowNext(root,config):op==='step'?await workflowStep(root,{hash:args.hash,allowActions:args['allow-actions']===true,allowLaunch:args['allow-launch']===true,allowPaidApi:args['allow-paid-api']===true,retryFailed:args['retry-failed']===true,confirmReset:args['confirm-reset']===true}):null;

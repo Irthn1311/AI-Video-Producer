@@ -1,6 +1,7 @@
 import path from 'node:path';
+import {randomUUID} from 'node:crypto';
 import {loadEnv} from './utils.mjs';
-import {reservePaidCall} from './state.mjs';
+import {reservePaidCall,saveState} from './state.mjs';
 import {ExecutionError,providerHttpError} from './execution-errors.mjs';
 
 export function loadVoiceEnvironment(root){
@@ -24,6 +25,10 @@ export async function synthesizeVoice(root,config,scene,state,opts={}){
   const text='Speak in '+request.language+'. '+request.style+'. Read only the following: '+request.narration;
   const body={contents:[{parts:[{text}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:request.voice}}}}};
   const budgetReservation=reservePaidCall(root,state,config,opts.budgetSession,config.voiceover.estimatedUsdPerCall);
+  const callId=randomUUID(),started=Date.now(),phase=opts.phase==='BUILD'?'BUILD':'PRODUCTION';
+  state.history.push({event:'provider-request-started',provider:'gemini',callId,phase,scene:scene.id,at:new Date().toISOString()});saveState(root,state);
+  let outcome='FAILED';
+  try{
   let response;try{response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(request.model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify(body),signal:AbortSignal.timeout(120000)});}catch{throw new ExecutionError('PROVIDER_TRANSIENT','Gemini TTS network request failed or timed out');}
   if(!response.ok)throw providerHttpError(response.status);
   let json;try{json=await response.json();}catch{throw new ExecutionError('PROVIDER_RESPONSE_INVALID','Invalid TTS response JSON');}
@@ -33,5 +38,6 @@ export async function synthesizeVoice(root,config,scene,state,opts={}){
   if(!/audio\/(L16|pcm)/i.test(mime))throw new ExecutionError('PROVIDER_RESPONSE_INVALID','Unsupported raw TTS audio mime type');
   const rate=Number(mime.match(/rate=(\d+)/i)?.[1]||24000),pcm=Buffer.from(part.inlineData.data,'base64');
   if(!Number.isInteger(rate)||rate<8000||rate>96000||pcm.length<100||pcm.length%2||pcm.length>96_000_000)throw new ExecutionError('PROVIDER_RESPONSE_INVALID','Invalid PCM audio response');
-  return {request,wav:wavFromPcm(pcm,rate),budgetReservation};
+  outcome='AUDIO_VALID';return {request,wav:wavFromPcm(pcm,rate),budgetReservation};
+  }finally{state.history.push({event:'provider-request-finished',provider:'gemini',callId,phase,status:outcome,elapsedMs:Date.now()-started,at:new Date().toISOString()});saveState(root,state);}
 }

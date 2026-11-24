@@ -150,6 +150,8 @@
 
 ## B1. Production Orchestrator & Scene Execution — P1
 
+> **F-05e (PARTIAL; CI pending):** read-only `telemetry` aggregates Build/Production journal attempts, duration, failures, retry/reconciliation and known capability outcomes; provider reservation vs observed dispatch/format outcome; current artifact integrity and unchanged baseline on frozen production revision. Workflow skill matching reuses bounded analysis and invalidates on registry hash. No actual billing, external LLM token/quota, complete legacy instrumentation, measured counterfactual savings or automatic quality downgrade.
+
 > **F-05d (PARTIAL; CI pending):** unified `workflow next|step` derives Build/Production task from canonical gate, current source/config, cached bounded analysis and skills, runtime/adapter status and rehearsal proofs; task hash, explicit authorization/review/agent handoffs, risk-prioritized pending rehearsal, bounded local Build journal/attempts/observed duration, delegates frozen Production to existing executor. No LLM execution, automatic skill installation, automatic approvals, semantic reasoning, global lock or hard wall-clock kill. See `docs/workflow.md`.
 
 > **F-05c (PARTIAL; CI pending):** opt-in reviewed Node entrypoint/source/runtime hash, explicit launch authorization, loopback readiness, fresh direct child per operation, bounded cleanup, local session lock/report, Build gate and capture/rehearsal fingerprint. Operator-declared disposable fixture only, not OS sandbox, dependency installation, general runtime launch, process-tree isolation, database reset, auth provisioning or guaranteed crash cleanup. See `docs/app-runtime.md`.

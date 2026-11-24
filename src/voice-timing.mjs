@@ -53,7 +53,7 @@ export async function auditionVoice(root,config,scene,state,opts={}){
   requireVoice(config,scene);
   const existing=candidates(root,config,scene).find(x=>x.origin==='GEMINI_TTS');
   if(existing&&!opts.force)return {...existing,reused:true};
-  const generated=await synthesizeVoice(root,config,scene,state,opts);
+  const generated=await synthesizeVoice(root,config,scene,state,{...opts,phase:'BUILD'});
   return {...saveCandidate(root,config,scene,generated.wav,'GEMINI_TTS'),budgetReservation:generated.budgetReservation};
 }
 export function importAudition(root,config,scene,{file,confirm=false}={}){

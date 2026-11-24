@@ -11,6 +11,7 @@ import {ExecutionError,failureDetails,interruptedFailure} from './execution-erro
 import {verificationMode,verifySceneClaims} from './evidence.mjs';
 import {captureEvidencePassed} from './capture-assertions.mjs';
 import {managedApp} from './app-runtime.mjs';
+import {artifactInventory} from './telemetry.mjs';
 
 const dir=root=>path.join(avpDir(root),'production');
 const mutex=root=>path.join(dir(root),'executor.lock');
@@ -164,18 +165,19 @@ export async function productionStep(root,opts={}){
     const key=keyOf(next);
     const attempts=j?.events.filter(e=>e.key===key&&e.status==='RUNNING').length||0;
     if(attempts>=1+retryLimit(config))return {...next,status:'BLOCKED',code:'RETRY_LIMIT_REACHED',action:'Diagnose/repair and prepare a new reviewed Build revision'};
-    j??={schemaVersion:1,runId:randomUUID(),revision:next.revision,planHash:next.planHash,createdAt:now(),events:[]};
+    j??={schemaVersion:1,runId:randomUUID(),revision:next.revision,planHash:next.planHash,createdAt:now(),artifactBaseline:artifactInventory(root,config,state),events:[]};
     const event={key,kind:next.kind,sceneId:next.sceneId,capability:next.capability,attempt:attempts+1};
     const start=Date.now();
     j.events.push({...event,status:'RUNNING',at:now()});writeJson(journalFile(root,next.revision),j);
     try{
-      await dispatch(root,config,state,next,opts);
+      const result=await dispatch(root,config,state,next,opts);
+      const outcome=result?.reused===true?'REUSED':result?.reusedSelectedAudio===true?'SELECTED_AUDIO_COPY':'WORK_PERFORMED';
       // Execution does not imply verification. QA and approval are separate.
       // Re-read persistent state and verify frozen Build again after dispatch.
       const current=getProject(root).config;
       if(sha(current)!==sha(config)||revisionFor(root,current,loadState(root)).revision!==next.revision)
         throw new ExecutionError('BUILD_DRIFT','Build changed while step was executing; inspect artifacts before reuse');
-      j.events.push({...event,status:'EXECUTED',at:now(),elapsedMs:Date.now()-start});
+      j.events.push({...event,status:'EXECUTED',at:now(),elapsedMs:Date.now()-start,outcome});
       writeJson(journalFile(root,next.revision),j);
       return {status:'EXECUTED',runId:j.runId,step:event,next:snapshot(root,current,loadState(root))};
     }catch(e){

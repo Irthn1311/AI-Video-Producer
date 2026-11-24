@@ -156,7 +156,13 @@ async function exercise(kind){
     assert.deepEqual(status.scenes.find(x=>x.id==='overview').stale,{capture:false,voice:false,captions:false,preview:false});
     assert.deepEqual(status.scenes.find(x=>x.id==='workflow').stale,{capture:false,voice:false,captions:false,preview:true});
     assert.equal(status.budget.ttsCalls,0);
-    await json(root,'preview','--scene','workflow');assert.equal((await json(root,'qa','--scene','workflow')).pass,true);
+    const repair=await json(root,'production','step');assert.equal(repair.status,'EXECUTED');assert.equal(repair.step.kind,'preview');
+    const telemetry=await json(root,'telemetry');assert.equal(telemetry.provider.reservedCalls,0);assert.equal(telemetry.artifacts.baselineAvailable,true);
+    assert.ok(telemetry.artifacts.unchangedCurrentSinceFirstDispatch.some(a=>a.sceneId==='overview'&&a.kind==='preview'));
+    assert.ok(telemetry.artifacts.unchangedCurrentSinceFirstDispatch.some(a=>a.sceneId==='workflow'&&a.kind==='capture'));
+    assert.ok(!telemetry.artifacts.unchangedCurrentSinceFirstDispatch.some(a=>a.sceneId==='workflow'&&a.kind==='preview'));
+    assert.equal(telemetry.currentProduction.byKind.preview.executed,1);
+    assert.equal((await json(root,'qa','--scene','workflow')).pass,true);
     await cli(root,'approve','--stage','scene','--scene','workflow');
     assert.equal((await json(root,'render')).pass,true);
     assert.deepEqual(['capture.mp4','voice.wav','preview.mp4','qa-report.json'].map(n=>fileHash(path.join(unchanged,n))),keep);
